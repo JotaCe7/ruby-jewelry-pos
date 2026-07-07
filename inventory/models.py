@@ -11,16 +11,19 @@ from core.models import TimeStampedModel
 
 class ProductQuerySet(models.QuerySet):
     def with_stock(self):
-        """Annotates current_stock from historical entries minus audit
-        shrinkage. Uses independent Subqueries (not two Sum()s on sibling
-        reverse relations in one annotate()) — combining them directly
-        would JOIN entries × audits and inflate both sums by each other's
-        row count. Phase 5 (POS) will extend this to also subtract
-        `exits__quantity` once InventoryExit exists — keep in sync with
+        """Annotates current_stock from historical entries, minus audit
+        shrinkage and POS exits. Uses independent Subqueries (not multiple
+        Sum()s on sibling reverse relations in one annotate()) — combining
+        them directly would JOIN entries × audits × exits and inflate each
+        sum by the other tables' row counts. Keep in sync with
         `inventory.services.get_current_stock`, which does the same
         computation for single-instance use (e.g. right after saving a new
         entry, before the queryset would reflect it in a fresh query).
         """
+        # Imported lazily to avoid a circular import: pos.models.InventoryExit
+        # has a FK to Product, so pos can't be imported at module load time.
+        from pos.models import InventoryExit
+
         entries_total = (
             InventoryEntry.objects.filter(product=OuterRef("pk"))
             .order_by()
@@ -35,11 +38,17 @@ class ProductQuerySet(models.QuerySet):
             .annotate(total=Sum("loss_adjustment"))
             .values("total")
         )
+        exits_total = (
+            InventoryExit.objects.filter(product=OuterRef("pk"))
+            .order_by()
+            .values("product")
+            .annotate(total=Sum("quantity"))
+            .values("total")
+        )
         return self.annotate(
-            current_stock=Coalesce(
-                Subquery(entries_total, output_field=IntegerField()), 0
-            )
+            current_stock=Coalesce(Subquery(entries_total, output_field=IntegerField()), 0)
             - Coalesce(Subquery(audit_loss_total, output_field=IntegerField()), 0)
+            - Coalesce(Subquery(exits_total, output_field=IntegerField()), 0)
         )
 
 

@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 
 from catalogs.models import ColorVariant, Presentation
 
+from .filters import ProductFilter
 from .models import InventoryAudit, InventoryEntry, PriceTier, Product
 from .serializers import (
     InventoryAuditSerializer,
@@ -16,7 +17,9 @@ from .services import generate_sku, get_unique_sku
 
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
-    filterset_fields = ["subcategory", "subcategory__category", "supplier", "is_active"]
+    filterset_class = ProductFilter
+    ordering_fields = ["base_model", "suggested_price", "current_stock", "unit_cost"]
+    ordering = ["base_model"]
 
     def get_queryset(self):
         return (

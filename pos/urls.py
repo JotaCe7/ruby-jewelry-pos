@@ -1,7 +1,10 @@
-from django.urls import path
+from rest_framework.routers import DefaultRouter
+
+from .views import SaleViewSet
 
 app_name = "pos"
 
-urlpatterns = [
-    # Endpoints are added as each module's models/viewsets are built.
-]
+router = DefaultRouter()
+router.register("sales", SaleViewSet, basename="sale")
+
+urlpatterns = router.urls
