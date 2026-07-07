@@ -1,0 +1,35 @@
+[
+  {"model": "catalogs.expensecategory", "pk": 1, "fields": {"name": "Alquiler", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.expensecategory", "pk": 2, "fields": {"name": "Marketing", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.expensecategory", "pk": 3, "fields": {"name": "Operaciones", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.expensecategory", "pk": 4, "fields": {"name": "Legal", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.expensecategory", "pk": 5, "fields": {"name": "Inventario/Mercadería", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+
+  {"model": "catalogs.paymentmethod", "pk": 1, "fields": {"name": "Efectivo", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.paymentmethod", "pk": 2, "fields": {"name": "Transferencia", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.paymentmethod", "pk": 3, "fields": {"name": "Yape", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.paymentmethod", "pk": 4, "fields": {"name": "Plin", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.paymentmethod", "pk": 5, "fields": {"name": "Tarjeta de Crédito/Débito", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+
+  {"model": "catalogs.productcategory", "pk": 1, "fields": {"name": "Joyería Fina", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.productcategory", "pk": 2, "fields": {"name": "Joyería de Fantasía", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.productcategory", "pk": 3, "fields": {"name": "Accesorios", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.productcategory", "pk": 4, "fields": {"name": "Empaques", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.productcategory", "pk": 5, "fields": {"name": "Servicios", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+
+  {"model": "catalogs.productsubcategory", "pk": 1, "fields": {"name": "Aretes", "category": 2, "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.productsubcategory", "pk": 2, "fields": {"name": "Collares", "category": 2, "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.productsubcategory", "pk": 3, "fields": {"name": "Anillos", "category": 2, "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.productsubcategory", "pk": 4, "fields": {"name": "Bolsas de Regalo", "category": 4, "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.productsubcategory", "pk": 5, "fields": {"name": "Cartoncitos", "category": 4, "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.productsubcategory", "pk": 6, "fields": {"name": "Envíos Delivery", "category": 5, "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+
+  {"model": "catalogs.colorvariant", "pk": 1, "fields": {"name": "Dorado", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.colorvariant", "pk": 2, "fields": {"name": "Plateado", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.colorvariant", "pk": 3, "fields": {"name": "Rojo", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.colorvariant", "pk": 4, "fields": {"name": "Multicolor", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+
+  {"model": "catalogs.presentation", "pk": 1, "fields": {"name": "Individual", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.presentation", "pk": 2, "fields": {"name": "Pack x2", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.presentation", "pk": 3, "fields": {"name": "Pack x12/Bolsa", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}}
+]
