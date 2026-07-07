@@ -21,7 +21,7 @@ class ProductSerializer(serializers.ModelSerializer):
     color_name = serializers.CharField(source="color.name", read_only=True, default=None)
     presentation_name = serializers.CharField(source="presentation.name", read_only=True, default=None)
     supplier_name = serializers.CharField(source="supplier.name", read_only=True, default=None)
-    current_stock = serializers.IntegerField(read_only=True)
+    current_stock = serializers.SerializerMethodField()
     inventory_value = serializers.SerializerMethodField()
     needs_restock = serializers.SerializerMethodField()
     price_tiers = PriceTierSerializer(many=True, read_only=True)
@@ -53,11 +53,19 @@ class ProductSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["unit_cost"]
 
+    def get_current_stock(self, obj) -> int:
+        # `with_stock()` annotates this on list/retrieve queries; instances
+        # reached some other way (e.g. nested inside another serializer)
+        # fall back to the single-instance equivalent computation.
+        if hasattr(obj, "current_stock"):
+            return obj.current_stock
+        return get_current_stock(obj)
+
     def get_inventory_value(self, obj) -> str:
-        return str((Decimal(obj.current_stock) * obj.unit_cost).quantize(Decimal("0.01")))
+        return str((Decimal(self.get_current_stock(obj)) * obj.unit_cost).quantize(Decimal("0.01")))
 
     def get_needs_restock(self, obj) -> bool:
-        return obj.current_stock <= obj.min_stock
+        return self.get_current_stock(obj) <= obj.min_stock
 
     def validate_sku(self, value):
         if not value:

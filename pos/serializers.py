@@ -1,5 +1,3 @@
-import uuid
-from collections import defaultdict
 from decimal import Decimal
 
 from django.utils.translation import gettext_lazy as _
@@ -7,9 +5,10 @@ from rest_framework import serializers
 
 from catalogs.models import PaymentMethod
 from inventory.models import Product
+from inventory.serializers import ProductSerializer
 
-from .models import InventoryExit, MovementType, Sale
-from .services import ComboProrationService
+from .models import DraftSale, DraftSaleLine, InventoryExit, MovementType, Sale
+from .services import create_sale_from_lines
 
 
 class SaleLineInputSerializer(serializers.Serializer):
@@ -60,11 +59,21 @@ class SaleSerializer(serializers.ModelSerializer):
     lines = SaleLineInputSerializer(many=True, write_only=True)
     line_items = InventoryExitSerializer(source="lines", many=True, read_only=True)
     customer_name = serializers.CharField(source="customer.name", read_only=True, default=None)
+    seller_name = serializers.CharField(source="seller.username", read_only=True, default=None)
     total = serializers.SerializerMethodField()
 
     class Meta:
         model = Sale
-        fields = ["id", "date", "customer", "customer_name", "lines", "line_items", "total"]
+        fields = [
+            "id",
+            "date",
+            "customer",
+            "customer_name",
+            "seller_name",
+            "lines",
+            "line_items",
+            "total",
+        ]
 
     def get_total(self, obj) -> str:
         total = sum((line.final_price for line in obj.lines.all()), Decimal("0.00"))
@@ -82,48 +91,50 @@ class SaleSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         lines_data = validated_data.pop("lines")
-        sale = Sale.objects.create(**validated_data)
-
-        standalone_lines = []
-        combo_groups = defaultdict(list)
-        for line in lines_data:
-            combo_key = line.get("combo_key")
-            if combo_key:
-                combo_groups[combo_key].append(line)
-            else:
-                standalone_lines.append(line)
-
-        for line in standalone_lines:
-            self._create_line(sale, line, discount=line.get("discount") or Decimal("0.00"))
-
-        for group_lines in combo_groups.values():
-            combo_group_id = uuid.uuid4()
-            total_discount = group_lines[0].get("combo_discount_total") or Decimal("0.00")
-            weights = [line["unit_price"] * line["quantity"] for line in group_lines]
-            discounts = ComboProrationService.apply(weights, total_discount)
-            for line, discount in zip(group_lines, discounts):
-                self._create_line(sale, line, discount=discount, combo_group=combo_group_id)
-
-        return sale
-
-    def _create_line(self, sale, line, discount, combo_group=None):
-        movement_type = line["movement_type"]
-        is_sale = movement_type == MovementType.SALE
-        quantity = line["quantity"]
-        unit_price = line["unit_price"]
-
-        final_price = Decimal("0.00")
-        if is_sale:
-            final_price = max(unit_price * quantity - discount, Decimal("0.00"))
-
-        InventoryExit.objects.create(
-            sale=sale,
-            product=line["product"],
-            movement_type=movement_type,
-            quantity=quantity,
-            unit_price_snapshot=unit_price,
-            discount_applied=discount if is_sale else Decimal("0.00"),
-            final_price=final_price,
-            payment_method=line.get("payment_method") if is_sale else None,
-            combo_group=combo_group,
+        seller = self.context["request"].user
+        return create_sale_from_lines(
+            validated_data["date"], validated_data.get("customer"), seller, lines_data
         )
+
+
+class DraftSaleLineSerializer(serializers.ModelSerializer):
+    product_detail = ProductSerializer(source="product", read_only=True)
+
+    class Meta:
+        model = DraftSaleLine
+        fields = [
+            "id",
+            "product",
+            "product_detail",
+            "movement_type",
+            "quantity",
+            "unit_price",
+            "discount",
+            "payment_method",
+            "combo_key",
+            "combo_discount_total",
+        ]
+
+
+class DraftSaleSerializer(serializers.ModelSerializer):
+    # Deliberately lenient (no cross-field validation like the required
+    # payment_method-for-SALE rule) — a draft is a work in progress by
+    # definition; that rule is enforced only at finalize time.
+    lines = DraftSaleLineSerializer(many=True)
+    customer_name = serializers.CharField(source="customer.name", read_only=True, default=None)
+
+    class Meta:
+        model = DraftSale
+        fields = ["id", "date", "customer", "customer_name", "lines"]
+
+    def update(self, instance, validated_data):
+        lines_data = validated_data.pop("lines", None)
+        instance.date = validated_data.get("date", instance.date)
+        instance.customer = validated_data.get("customer", instance.customer)
+        instance.save()
+        if lines_data is not None:
+            instance.lines.all().delete()
+            DraftSaleLine.objects.bulk_create(
+                DraftSaleLine(draft_sale=instance, **line) for line in lines_data
+            )
+        return instance

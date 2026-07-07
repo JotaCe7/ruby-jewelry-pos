@@ -1,8 +1,10 @@
 from rest_framework import viewsets
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from catalogs.models import ColorVariant, Presentation
+from core.permissions import IsAdminOrReadOnly
 
 from .filters import ProductFilter
 from .models import InventoryAudit, InventoryEntry, PriceTier, Product
@@ -16,10 +18,13 @@ from .services import generate_sku, get_unique_sku
 
 
 class ProductViewSet(viewsets.ModelViewSet):
+    # A Vendedor needs to browse the catalog (stock/price) from the POS
+    # picker, but only Admin edits products.
     serializer_class = ProductSerializer
     filterset_class = ProductFilter
     ordering_fields = ["base_model", "suggested_price", "current_stock", "unit_cost"]
     ordering = ["base_model"]
+    permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
         return (
@@ -30,24 +35,31 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 
 class PriceTierViewSet(viewsets.ModelViewSet):
+    # Pricing strategy — Admin-only; already exposed read-only to everyone
+    # nested inside ProductSerializer.price_tiers.
     queryset = PriceTier.objects.all()
     serializer_class = PriceTierSerializer
     filterset_fields = ["product"]
+    permission_classes = [IsAdminUser]
 
 
 class InventoryEntryViewSet(viewsets.ModelViewSet):
     queryset = InventoryEntry.objects.select_related("product").all()
     serializer_class = InventoryEntrySerializer
     filterset_fields = ["product"]
+    permission_classes = [IsAdminUser]
 
 
 class InventoryAuditViewSet(viewsets.ModelViewSet):
     queryset = InventoryAudit.objects.select_related("product").all()
     serializer_class = InventoryAuditSerializer
     filterset_fields = ["product"]
+    permission_classes = [IsAdminUser]
 
 
 class SkuPreviewView(APIView):
+    permission_classes = [IsAdminUser]
+
     def get(self, request):
         base_model = request.query_params.get("base_model", "")
         color_id = request.query_params.get("color")
