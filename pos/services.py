@@ -1,6 +1,31 @@
 import uuid
 from collections import defaultdict
+from datetime import timedelta
 from decimal import Decimal
+
+from django.db import transaction
+from django.utils import timezone
+
+
+class RegisterError(Exception):
+    """Base for all register/closing business-rule violations — views catch
+    this one class and turn it into a 400 with the message as-is."""
+
+
+class RegisterClosedError(RegisterError):
+    pass
+
+
+class RegisterAlreadyOpenError(RegisterError):
+    pass
+
+
+class ProcessDateBlockedError(RegisterError):
+    pass
+
+
+class InvalidPinError(RegisterError):
+    pass
 
 
 class ComboProrationService:
@@ -30,19 +55,204 @@ class ComboProrationService:
         return discounts
 
 
-def create_sale_from_lines(date, customer, seller, lines_data):
+def get_process_date():
+    from .models import ProcessDate
+
+    return ProcessDate.get_or_create_default().current_date
+
+
+def ensure_register_open(seller):
+    """Raises unless `seller` currently has an open register — called at the
+    top of create_sale_from_lines so a sale can never be attributed to
+    someone who hasn't (or no longer has) their register open."""
+    from .models import CashRegisterSession
+
+    session = CashRegisterSession.objects.filter(seller=seller, is_open=True).first()
+    if not session:
+        raise RegisterClosedError("La caja de este vendedor no está abierta. Debe abrirla antes de vender.")
+    return session
+
+
+def open_register(user):
+    """Self-service open. A Vendedor can only open onto 'today'; if the
+    global process date is behind today and nobody else has a session open
+    (i.e. the gap days had no activity at all), it jumps straight to today
+    instead of forcing empty closings for the skipped days."""
+    from .models import CashRegisterSession, ProcessDate
+
+    session, _created = CashRegisterSession.objects.get_or_create(seller=user)
+    if session.is_open:
+        raise RegisterAlreadyOpenError("Tu caja ya está abierta.")
+
+    process_date_obj = ProcessDate.get_or_create_default()
+    today = timezone.localdate()
+
+    if process_date_obj.current_date < today:
+        if CashRegisterSession.objects.filter(is_open=True).exists():
+            raise ProcessDateBlockedError(
+                "Todavía hay otra caja abierta en la fecha de proceso anterior. Espera a que se cierre."
+            )
+        process_date_obj.current_date = today
+        process_date_obj.save(update_fields=["current_date"])
+    elif process_date_obj.current_date > today:
+        raise ProcessDateBlockedError(
+            "La fecha de proceso está adelantada respecto a hoy. Contacta al administrador."
+        )
+
+    session.is_open = True
+    session.opened_at = timezone.now()
+    session.save(update_fields=["is_open", "opened_at"])
+    return session
+
+
+def force_open_register(seller):
+    """Admin-only escape hatch: opens a specific seller's register under
+    whatever the current process_date already is, skipping the 'must equal
+    today' rule — used to attribute a forgotten sale to an already-closed
+    date, right before that seller (or the admin) redoes their Z."""
+    from .models import CashRegisterSession
+
+    session, _created = CashRegisterSession.objects.get_or_create(seller=seller)
+    session.is_open = True
+    session.opened_at = timezone.now()
+    session.save(update_fields=["is_open", "opened_at"])
+    return session
+
+
+def set_process_date(new_date):
+    """Admin-only: sets the global process date directly. Returns warning
+    flags for the caller (view layer) to surface before/after confirming —
+    this function itself never blocks the change."""
+    from .models import ProcessDate, RegisterClosing
+
+    today = timezone.localdate()
+    process_date_obj = ProcessDate.get_or_create_default()
+    process_date_obj.current_date = new_date
+    process_date_obj.save(update_fields=["current_date"])
+
+    return {
+        "is_future": new_date > today,
+        "has_prior_z": RegisterClosing.objects.filter(process_date=new_date, closing_type="Z").exists(),
+    }
+
+
+def _closing_period(seller, closing_type):
+    """Start/end of the window a closing should total up: from the end of
+    the seller's last relevant closing since they opened, up to now. An X
+    resets against the last X-or-Z; a Z resets against the last Z only (so
+    intermediate X's don't shrink what the Z reports) — 'la Z es todo desde
+    la última Z', per spec."""
+    from .models import CashRegisterSession, ClosingType, RegisterClosing
+
+    session = CashRegisterSession.objects.filter(seller=seller).first()
+    opened_at = session.opened_at if session and session.opened_at else timezone.now()
+
+    relevant_types = [ClosingType.Z] if closing_type == ClosingType.Z else [ClosingType.X, ClosingType.Z]
+    last_closing = (
+        RegisterClosing.objects.filter(seller=seller, created_at__gte=opened_at, closing_type__in=relevant_types)
+        .order_by("-created_at")
+        .first()
+    )
+    period_start = last_closing.period_end if last_closing else opened_at
+    period_end = timezone.now()
+    return period_start, period_end
+
+
+def compute_closing_totals(seller, closing_type):
+    from .models import InventoryExit, MovementType
+
+    period_start, period_end = _closing_period(seller, closing_type)
+    exits = InventoryExit.objects.filter(
+        sale__seller=seller, sale__created_at__gte=period_start, sale__created_at__lt=period_end
+    ).select_related("payment_method")
+
+    total_sales = Decimal("0.00")
+    by_payment_method = defaultdict(lambda: Decimal("0.00"))
+    total_losses = Decimal("0.00")
+    sale_ids = set()
+
+    for exit_row in exits:
+        sale_ids.add(exit_row.sale_id)
+        if exit_row.movement_type == MovementType.SALE:
+            total_sales += exit_row.final_price
+            method_name = exit_row.payment_method.name if exit_row.payment_method else "—"
+            by_payment_method[method_name] += exit_row.final_price
+        else:
+            total_losses += exit_row.unit_cost_snapshot * exit_row.quantity
+
+    return {
+        "period_start": period_start,
+        "period_end": period_end,
+        "total_sales": str(total_sales),
+        "total_by_payment_method": {name: str(amount) for name, amount in by_payment_method.items()},
+        "total_losses": str(total_losses),
+        "sale_count": len(sale_ids),
+    }
+
+
+def preview_closing(seller, closing_type, pin):
+    """Pantalla mode: validates the PIN and returns the totals without
+    persisting anything or touching the register's is_open state."""
+    from .models import ClosingPin
+
+    if not ClosingPin.get_or_create_default().check_pin(pin):
+        raise InvalidPinError("PIN incorrecto.")
+    return compute_closing_totals(seller, closing_type)
+
+
+def execute_closing(seller, closing_type, pin, performed_by):
+    """Impresora mode: validates the PIN, persists a RegisterClosing row,
+    and — for a Z — closes the seller's session and advances the global
+    process date once no session remains open for it."""
+    from .models import CashRegisterSession, ClosingPin, ClosingType, ProcessDate, RegisterClosing
+
+    if not ClosingPin.get_or_create_default().check_pin(pin):
+        raise InvalidPinError("PIN incorrecto.")
+
+    totals = compute_closing_totals(seller, closing_type)
+
+    with transaction.atomic():
+        closing = RegisterClosing.objects.create(
+            seller=seller,
+            closing_type=closing_type,
+            process_date=get_process_date(),
+            period_start=totals["period_start"],
+            period_end=totals["period_end"],
+            total_sales=totals["total_sales"],
+            total_by_payment_method=totals["total_by_payment_method"],
+            total_losses=totals["total_losses"],
+            sale_count=totals["sale_count"],
+            performed_by=performed_by,
+        )
+
+        if closing_type == ClosingType.Z:
+            CashRegisterSession.objects.filter(seller=seller).update(is_open=False)
+
+            if not CashRegisterSession.objects.filter(is_open=True).exists():
+                process_date_obj = ProcessDate.get_or_create_default()
+                process_date_obj.current_date = process_date_obj.current_date + timedelta(days=1)
+                process_date_obj.save(update_fields=["current_date"])
+
+    return closing
+
+
+def create_sale_from_lines(customer, seller, lines_data):
     """Creates a Sale + its InventoryExit lines from plain line dicts,
     running combo proration exactly once. Shared by the direct
     POST /api/pos/sales/ endpoint and DraftSale.finalize, so a draft
     promoted to a real sale goes through identical logic to one created
     in a single request.
 
+    The sale is always dated to the current global process date — never a
+    client-supplied one — and requires `seller` to have an open register.
+
     Each line dict has: product, movement_type, quantity, unit_price,
     discount, payment_method, combo_key, combo_discount_total.
     """
     from .models import InventoryExit, MovementType, Sale
 
-    sale = Sale.objects.create(date=date, customer=customer, seller=seller)
+    ensure_register_open(seller)
+    sale = Sale.objects.create(date=get_process_date(), customer=customer, seller=seller)
 
     standalone_lines = []
     combo_groups = defaultdict(list)
@@ -69,6 +279,7 @@ def create_sale_from_lines(date, customer, seller, lines_data):
             movement_type=movement_type,
             quantity=quantity,
             unit_price_snapshot=unit_price,
+            unit_cost_snapshot=line["product"].unit_cost,
             discount_applied=discount if is_sale else Decimal("0.00"),
             final_price=final_price,
             payment_method=line.get("payment_method") if is_sale else None,

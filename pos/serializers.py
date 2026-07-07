@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
@@ -7,8 +8,10 @@ from catalogs.models import PaymentMethod
 from inventory.models import Product
 from inventory.serializers import ProductSerializer
 
-from .models import DraftSale, DraftSaleLine, InventoryExit, MovementType, Sale
+from .models import DraftSale, DraftSaleLine, InventoryExit, MovementType, RegisterClosing, Sale
 from .services import create_sale_from_lines
+
+User = get_user_model()
 
 
 class SaleLineInputSerializer(serializers.Serializer):
@@ -61,6 +64,13 @@ class SaleSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source="customer.name", read_only=True, default=None)
     seller_name = serializers.CharField(source="seller.username", read_only=True, default=None)
     total = serializers.SerializerMethodField()
+    # Admin-only retroactive-attribution path: force this sale onto another
+    # seller's already-open (or admin-force-opened) register, confirmed with
+    # that seller's own login password rather than the shared closing PIN.
+    seller_override = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(), required=False, allow_null=True, write_only=True
+    )
+    seller_password = serializers.CharField(required=False, allow_blank=True, write_only=True)
 
     class Meta:
         model = Sale
@@ -73,7 +83,10 @@ class SaleSerializer(serializers.ModelSerializer):
             "lines",
             "line_items",
             "total",
+            "seller_override",
+            "seller_password",
         ]
+        read_only_fields = ["date"]
 
     def get_total(self, obj) -> str:
         total = sum((line.final_price for line in obj.lines.all()), Decimal("0.00"))
@@ -91,10 +104,49 @@ class SaleSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         lines_data = validated_data.pop("lines")
-        seller = self.context["request"].user
-        return create_sale_from_lines(
-            validated_data["date"], validated_data.get("customer"), seller, lines_data
-        )
+        requester = self.context["request"].user
+        seller_override = validated_data.pop("seller_override", None)
+        seller_password = validated_data.pop("seller_password", "")
+
+        seller = requester
+        if seller_override is not None:
+            if not requester.is_staff:
+                raise serializers.ValidationError(
+                    _("Solo un administrador puede registrar una venta a nombre de otro vendedor.")
+                )
+            if not seller_override.check_password(seller_password):
+                raise serializers.ValidationError(
+                    {"seller_password": _("Contraseña incorrecta para el vendedor seleccionado.")}
+                )
+            seller = seller_override
+
+        return create_sale_from_lines(validated_data.get("customer"), seller, lines_data)
+
+
+class RegisterClosingSerializer(serializers.ModelSerializer):
+    seller_name = serializers.CharField(source="seller.username", read_only=True)
+    performed_by_name = serializers.CharField(source="performed_by.username", read_only=True)
+    closing_type_display = serializers.CharField(source="get_closing_type_display", read_only=True)
+
+    class Meta:
+        model = RegisterClosing
+        fields = [
+            "id",
+            "seller",
+            "seller_name",
+            "closing_type",
+            "closing_type_display",
+            "process_date",
+            "period_start",
+            "period_end",
+            "total_sales",
+            "total_by_payment_method",
+            "total_losses",
+            "sale_count",
+            "performed_by",
+            "performed_by_name",
+            "created_at",
+        ]
 
 
 class DraftSaleLineSerializer(serializers.ModelSerializer):

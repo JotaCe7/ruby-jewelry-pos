@@ -1,11 +1,26 @@
-from django.utils import timezone
-from rest_framework import viewsets
+from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
+from django.utils.dateparse import parse_date
+from rest_framework import mixins, viewsets
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import DraftSale, MovementType, Sale
-from .serializers import DraftSaleSerializer, SaleSerializer
-from .services import create_sale_from_lines
+from .models import CashRegisterSession, ClosingPin, DraftSale, MovementType, RegisterClosing, Sale
+from .serializers import DraftSaleSerializer, RegisterClosingSerializer, SaleSerializer
+from .services import (
+    RegisterError,
+    create_sale_from_lines,
+    execute_closing,
+    force_open_register,
+    get_process_date,
+    open_register,
+    preview_closing,
+    set_process_date,
+)
+
+User = get_user_model()
 
 
 class SaleViewSet(viewsets.ModelViewSet):
@@ -19,6 +34,12 @@ class SaleViewSet(viewsets.ModelViewSet):
     serializer_class = SaleSerializer
     filterset_fields = ["customer", "seller", "date"]
 
+    def create(self, request, *args, **kwargs):
+        try:
+            return super().create(request, *args, **kwargs)
+        except RegisterError as exc:
+            raise ValidationError({"detail": str(exc)})
+
 
 class DraftSaleView(APIView):
     """The current user's single in-progress ticket — persisted server-side
@@ -27,7 +48,7 @@ class DraftSaleView(APIView):
 
     def get_object(self):
         draft, _ = DraftSale.objects.get_or_create(
-            created_by=self.request.user, defaults={"date": timezone.localdate()}
+            created_by=self.request.user, defaults={"date": get_process_date()}
         )
         return draft
 
@@ -76,6 +97,130 @@ class DraftSaleFinalizeView(APIView):
             for line in lines
         ]
 
-        sale = create_sale_from_lines(draft.date, draft.customer, request.user, lines_data)
+        try:
+            sale = create_sale_from_lines(draft.customer, request.user, lines_data)
+        except RegisterError as exc:
+            return Response({"detail": str(exc)}, status=400)
+
         draft.delete()
         return Response(SaleSerializer(sale).data, status=201)
+
+
+class RegisterStatusView(APIView):
+    """The caller's own register status plus the current global process
+    date — polled by the frontend to decide whether to show the
+    'abrir caja' gate before letting a Vendedor into the POS ticket."""
+
+    def get(self, request):
+        session = CashRegisterSession.objects.filter(seller=request.user).first()
+        return Response(
+            {
+                "is_open": bool(session and session.is_open),
+                "opened_at": session.opened_at if session else None,
+                "process_date": get_process_date(),
+            }
+        )
+
+
+class RegisterOpenView(APIView):
+    def post(self, request):
+        try:
+            session = open_register(request.user)
+        except RegisterError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        return Response({"is_open": session.is_open, "opened_at": session.opened_at})
+
+
+class RegisterForceOpenView(APIView):
+    """Admin-only: force-opens another seller's register regardless of the
+    'must equal today' rule — the first step of the retroactive-correction
+    flow (attribute a forgotten sale to an already-Z'd date)."""
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        seller = get_object_or_404(User, pk=request.data.get("seller"))
+        session = force_open_register(seller)
+        return Response({"is_open": session.is_open, "opened_at": session.opened_at})
+
+
+class RegisterSetProcessDateView(APIView):
+    """Admin-only: sets the global process date directly."""
+
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        raw_date = request.data.get("date")
+        new_date = parse_date(raw_date) if raw_date else None
+        if not new_date:
+            return Response({"detail": "date es requerido, formato YYYY-MM-DD."}, status=400)
+        flags = set_process_date(new_date)
+        return Response({"process_date": new_date, **flags})
+
+
+class RegisterClosingActionView(APIView):
+    """Runs an X or Z closing in either mode:
+    - mode=PANTALLA: preview only, nothing persisted or changed.
+    - mode=IMPRESORA: persists a RegisterClosing row and, for a Z, closes
+      the session and (if nobody else is open) advances the process date.
+
+    `seller` in the body is only for the narrow admin-on-behalf-of case
+    (retroactive correction) — normally the caller closes their own
+    register and `seller` is omitted."""
+
+    def post(self, request):
+        closing_type = request.data.get("closing_type")
+        mode = request.data.get("mode")
+        pin = request.data.get("pin", "")
+        seller_id = request.data.get("seller")
+
+        seller = request.user
+        if seller_id and str(seller_id) != str(request.user.pk):
+            if not request.user.is_staff:
+                return Response(
+                    {"detail": "Solo un administrador puede cerrar la caja de otro vendedor."}, status=403
+                )
+            seller = get_object_or_404(User, pk=seller_id)
+
+        if mode not in ("PANTALLA", "IMPRESORA"):
+            return Response({"detail": "mode debe ser PANTALLA o IMPRESORA."}, status=400)
+        if closing_type not in ("X", "Z"):
+            return Response({"detail": "closing_type debe ser X o Z."}, status=400)
+
+        try:
+            if mode == "PANTALLA":
+                totals = preview_closing(seller, closing_type, pin)
+                return Response(totals)
+            closing = execute_closing(seller, closing_type, pin, performed_by=request.user)
+        except RegisterError as exc:
+            return Response({"detail": str(exc)}, status=400)
+
+        return Response(RegisterClosingSerializer(closing).data, status=201)
+
+
+class RegisterPinView(APIView):
+    """Admin-only: set the shared closing PIN. GET only reports whether one
+    exists yet — the hash itself is never returned."""
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        return Response({"has_pin": bool(ClosingPin.get_or_create_default().pin_hash)})
+
+    def post(self, request):
+        pin = request.data.get("pin", "")
+        if not pin or not pin.isdigit():
+            return Response({"detail": "El PIN debe ser numérico."}, status=400)
+        ClosingPin.get_or_create_default().set_pin(pin)
+        return Response({"has_pin": True})
+
+
+class RegisterClosingViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Read-only history of executed closings, for the future Admin
+    reprint/history screen — Impresora-mode runs only, Pantalla previews
+    are never persisted."""
+
+    permission_classes = [IsAdminUser]
+    queryset = RegisterClosing.objects.select_related("seller", "performed_by").all()
+    serializer_class = RegisterClosingSerializer
+    filterset_fields = ["seller", "closing_type", "process_date"]
