@@ -10,10 +10,17 @@ from .models import (
 )
 
 
-@admin.register(ExpenseCategory, PaymentMethod, ColorVariant, Presentation, ProductCategory)
+@admin.register(ExpenseCategory, ColorVariant, Presentation, ProductCategory)
 class NamedCatalogAdmin(admin.ModelAdmin):
     list_display = ["name", "is_active"]
     list_filter = ["is_active"]
+    search_fields = ["name"]
+
+
+@admin.register(PaymentMethod)
+class PaymentMethodAdmin(admin.ModelAdmin):
+    list_display = ["name", "is_active", "is_cash"]
+    list_filter = ["is_active", "is_cash"]
     search_fields = ["name"]
 
 

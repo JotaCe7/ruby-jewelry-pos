@@ -11,6 +11,11 @@ class ExpenseCategory(NamedCatalogModel):
 
 
 class PaymentMethod(NamedCatalogModel):
+    # Drives the finance rule that a payment reference is required unless
+    # the method is cash — matched by this flag rather than the editable
+    # `name`, since an admin could rename "Efectivo" at any time.
+    is_cash = models.BooleanField(default=False)
+
     class Meta(NamedCatalogModel.Meta):
         verbose_name = _("payment method")
         verbose_name_plural = _("payment methods")

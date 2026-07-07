@@ -5,11 +5,11 @@
   {"model": "catalogs.expensecategory", "pk": 4, "fields": {"name": "Legal", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
   {"model": "catalogs.expensecategory", "pk": 5, "fields": {"name": "Inventario/Mercadería", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
 
-  {"model": "catalogs.paymentmethod", "pk": 1, "fields": {"name": "Efectivo", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
-  {"model": "catalogs.paymentmethod", "pk": 2, "fields": {"name": "Transferencia", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
-  {"model": "catalogs.paymentmethod", "pk": 3, "fields": {"name": "Yape", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
-  {"model": "catalogs.paymentmethod", "pk": 4, "fields": {"name": "Plin", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
-  {"model": "catalogs.paymentmethod", "pk": 5, "fields": {"name": "Tarjeta de Crédito/Débito", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.paymentmethod", "pk": 1, "fields": {"name": "Efectivo", "is_active": true, "is_cash": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.paymentmethod", "pk": 2, "fields": {"name": "Transferencia", "is_active": true, "is_cash": false, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.paymentmethod", "pk": 3, "fields": {"name": "Yape", "is_active": true, "is_cash": false, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.paymentmethod", "pk": 4, "fields": {"name": "Plin", "is_active": true, "is_cash": false, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
+  {"model": "catalogs.paymentmethod", "pk": 5, "fields": {"name": "Tarjeta de Crédito/Débito", "is_active": true, "is_cash": false, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
 
   {"model": "catalogs.productcategory", "pk": 1, "fields": {"name": "Joyería Fina", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},
   {"model": "catalogs.productcategory", "pk": 2, "fields": {"name": "Joyería de Fantasía", "is_active": true, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"}},

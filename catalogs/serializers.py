@@ -19,7 +19,7 @@ class ExpenseCategorySerializer(serializers.ModelSerializer):
 class PaymentMethodSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentMethod
-        fields = ["id", "name", "is_active"]
+        fields = ["id", "name", "is_active", "is_cash"]
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
