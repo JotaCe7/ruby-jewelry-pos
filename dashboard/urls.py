@@ -1,7 +1,10 @@
 from django.urls import path
 
+from .views import SummaryView, TodayView
+
 app_name = "dashboard"
 
 urlpatterns = [
-    # Endpoints are added as each module's models/viewsets are built.
+    path("today/", TodayView.as_view(), name="today"),
+    path("summary/", SummaryView.as_view(), name="summary"),
 ]
