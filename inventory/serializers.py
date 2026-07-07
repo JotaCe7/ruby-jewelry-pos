@@ -32,6 +32,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "id",
             "sku",
             "base_model",
+            "image",
             "subcategory",
             "subcategory_name",
             "category_name",

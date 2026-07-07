@@ -22,6 +22,10 @@ class PaymentMethod(NamedCatalogModel):
 
 
 class ProductCategory(NamedCatalogModel):
+    # Shown as the folder tile when the salesperson browses the POS
+    # picker in hierarchical mode.
+    image = models.ImageField(upload_to="product_categories/", null=True, blank=True)
+
     class Meta(NamedCatalogModel.Meta):
         verbose_name = _("product category")
         verbose_name_plural = _("product categories")
@@ -37,6 +41,7 @@ class ProductSubcategory(NamedCatalogModel):
         on_delete=models.PROTECT,
         related_name="subcategories",
     )
+    image = models.ImageField(upload_to="product_subcategories/", null=True, blank=True)
 
     class Meta(NamedCatalogModel.Meta):
         verbose_name = _("product subcategory")

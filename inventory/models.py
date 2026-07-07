@@ -46,6 +46,7 @@ class ProductQuerySet(models.QuerySet):
 class Product(TimeStampedModel):
     sku = models.CharField(max_length=50, unique=True)
     base_model = models.CharField(max_length=150)
+    image = models.ImageField(upload_to="products/", null=True, blank=True)
     subcategory = models.ForeignKey(
         ProductSubcategory, on_delete=models.PROTECT, related_name="products"
     )

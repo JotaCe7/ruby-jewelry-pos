@@ -25,7 +25,7 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 class ProductCategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductCategory
-        fields = ["id", "name", "is_active"]
+        fields = ["id", "name", "is_active", "image"]
 
 
 class ProductSubcategorySerializer(serializers.ModelSerializer):
@@ -33,7 +33,7 @@ class ProductSubcategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductSubcategory
-        fields = ["id", "name", "category", "category_name", "is_active"]
+        fields = ["id", "name", "category", "category_name", "is_active", "image"]
 
 
 class ColorVariantSerializer(serializers.ModelSerializer):
