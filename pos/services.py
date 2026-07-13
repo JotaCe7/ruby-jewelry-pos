@@ -382,13 +382,47 @@ def issue_document(sale, document_type=None):
     )
 
 
+def issue_credit_note(original_document, performed_by):
+    """Internal Nota de Crédito issued the instant a Nota de Venta is
+    voided — not a real SUNAT document (a Nota de Venta isn't fiscal
+    either), but it gives every anulación its own gapless correlativo, and
+    critically it's dated *today* regardless of when the original sale
+    happened. That's what makes a retroactive correction of an
+    already-closed period's sale show up in *today's* Cierre document
+    breakdown, instead of silently rewriting a period whose totals were
+    already printed and handed to someone."""
+    from .models import DocumentSeries, DocumentType, SaleDocument
+
+    DocumentSeries.get_or_create_default(DocumentType.NOTA_CREDITO)
+    series_row = DocumentSeries.objects.select_for_update().get(document_type=DocumentType.NOTA_CREDITO)
+    correlativo = series_row.next_correlativo
+    series_row.next_correlativo += 1
+    series_row.save(update_fields=["next_correlativo"])
+
+    return SaleDocument.objects.create(
+        sale=original_document.sale,
+        document_type=DocumentType.NOTA_CREDITO,
+        series=series_row.series,
+        correlativo=correlativo,
+        customer_name=original_document.customer_name,
+        customer_document_type=original_document.customer_document_type,
+        customer_document_number=original_document.customer_document_number,
+        subtotal=original_document.subtotal,
+        tax_amount=original_document.tax_amount,
+        total=original_document.total,
+        related_document=original_document,
+    )
+
+
 def void_document(document, reason, pin, performed_by):
     """Anulación: only a Nota de Venta can be voided today. Restores the
     stock it moved via a compensating InventoryEntry per line (no
     unit_cost, so the product's weighted-average cost is untouched — same
-    convention as any purely physical stock movement) and marks both the
-    document and its Sale voided, so every revenue aggregation
-    (compute_closing_totals, dashboard) excludes it from then on."""
+    convention as any purely physical stock movement), marks both the
+    document and its Sale voided (so every revenue aggregation —
+    compute_closing_totals, dashboard — excludes it from then on), and
+    issues an internal Nota de Crédito referencing it (see
+    issue_credit_note). Returns (voided_document, credit_note)."""
     from inventory.models import InventoryEntry
 
     from .models import AdminPin, DocumentStatus, DocumentType
@@ -419,7 +453,9 @@ def void_document(document, reason, pin, performed_by):
         document.void_reason = reason
         document.save(update_fields=["status", "voided_at", "voided_by", "void_reason"])
 
-    return document
+        credit_note = issue_credit_note(document, performed_by)
+
+    return document, credit_note
 
 
 def create_sale_from_lines(customer, seller, lines_data):

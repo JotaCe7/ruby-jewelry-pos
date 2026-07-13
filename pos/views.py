@@ -284,7 +284,7 @@ class SaleDocumentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
         serializer.is_valid(raise_exception=True)
 
         try:
-            document = void_document(
+            document, credit_note = void_document(
                 document,
                 reason=serializer.validated_data["reason"],
                 pin=serializer.validated_data["pin"],
@@ -293,4 +293,9 @@ class SaleDocumentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, view
         except RegisterError as exc:
             return Response({"detail": str(exc)}, status=400)
 
-        return Response(SaleDocumentSerializer(document).data)
+        return Response(
+            {
+                "voided_document": SaleDocumentSerializer(document).data,
+                "credit_note": SaleDocumentSerializer(credit_note).data,
+            }
+        )
