@@ -28,6 +28,10 @@ class InvalidPinError(RegisterError):
     pass
 
 
+class DocumentNotVoidableError(RegisterError):
+    pass
+
+
 class ComboProrationService:
     """Distributes a single combo-level discount across N lines
     proportionally to each line's weight (unit_price * quantity), so a
@@ -163,7 +167,10 @@ def compute_closing_totals(seller, closing_type):
 
     period_start, period_end = _closing_period(seller, closing_type)
     exits = InventoryExit.objects.filter(
-        sale__seller=seller, sale__created_at__gte=period_start, sale__created_at__lt=period_end
+        sale__seller=seller,
+        sale__created_at__gte=period_start,
+        sale__created_at__lt=period_end,
+        sale__is_voided=False,
     ).select_related("payment_method")
 
     total_sales = Decimal("0.00")
@@ -236,6 +243,82 @@ def execute_closing(seller, closing_type, pin, performed_by):
     return closing
 
 
+def issue_document(sale, document_type=None):
+    """Allocates the next gapless correlativo for `document_type` (locking
+    the DocumentSeries row so two concurrent sales never collide) and
+    snapshots the customer's identity + IGV-inclusive totals at this
+    instant. Only ever called with NOTA_VENTA today — the other types are
+    reachable through this same function once real electronic invoicing
+    exists, without a schema change."""
+    from .models import DocumentSeries, DocumentType, SaleDocument
+
+    document_type = document_type or DocumentType.NOTA_VENTA
+    customer = sale.customer
+
+    DocumentSeries.get_or_create_default(document_type)
+    series_row = DocumentSeries.objects.select_for_update().get(document_type=document_type)
+    correlativo = series_row.next_correlativo
+    series_row.next_correlativo += 1
+    series_row.save(update_fields=["next_correlativo"])
+
+    total = sum((line.final_price for line in sale.lines.all()), Decimal("0.00"))
+    subtotal = (total / Decimal("1.18")).quantize(Decimal("0.01"))
+    tax_amount = total - subtotal
+
+    return SaleDocument.objects.create(
+        sale=sale,
+        document_type=document_type,
+        series=series_row.series,
+        correlativo=correlativo,
+        customer_name=customer.name if customer else "",
+        customer_document_type=customer.document_type if customer else "",
+        customer_document_number=customer.tax_id if customer else "",
+        subtotal=subtotal,
+        tax_amount=tax_amount,
+        total=total,
+    )
+
+
+def void_document(document, reason, pin, performed_by):
+    """Anulación: only a Nota de Venta can be voided today. Restores the
+    stock it moved via a compensating InventoryEntry per line (no
+    unit_cost, so the product's weighted-average cost is untouched — same
+    convention as any purely physical stock movement) and marks both the
+    document and its Sale voided, so every revenue aggregation
+    (compute_closing_totals, dashboard) excludes it from then on."""
+    from inventory.models import InventoryEntry
+
+    from .models import ClosingPin, DocumentStatus, DocumentType
+
+    if document.document_type != DocumentType.NOTA_VENTA:
+        raise DocumentNotVoidableError("Solo se pueden anular Notas de Venta por ahora.")
+    if document.status == DocumentStatus.VOIDED:
+        raise DocumentNotVoidableError("Este documento ya fue anulado.")
+    if not ClosingPin.get_or_create_default().check_pin(pin):
+        raise InvalidPinError("PIN incorrecto.")
+
+    with transaction.atomic():
+        sale = document.sale
+        for exit_row in sale.lines.select_related("product").all():
+            InventoryEntry.objects.create(
+                date=get_process_date(),
+                product=exit_row.product,
+                quantity=exit_row.quantity,
+                notes=f"Devolución por anulación de {document.series}-{document.correlativo:06d}",
+            )
+
+        sale.is_voided = True
+        sale.save(update_fields=["is_voided"])
+
+        document.status = DocumentStatus.VOIDED
+        document.voided_at = timezone.now()
+        document.voided_by = performed_by
+        document.void_reason = reason
+        document.save(update_fields=["status", "voided_at", "voided_by", "void_reason"])
+
+    return document
+
+
 def create_sale_from_lines(customer, seller, lines_data):
     """Creates a Sale + its InventoryExit lines from plain line dicts,
     running combo proration exactly once. Shared by the direct
@@ -245,6 +328,8 @@ def create_sale_from_lines(customer, seller, lines_data):
 
     The sale is always dated to the current global process date — never a
     client-supplied one — and requires `seller` to have an open register.
+    Issuing its Nota de Venta happens in the same transaction, so a sale
+    is never left without its printable document.
 
     Each line dict has: product, movement_type, quantity, unit_price,
     discount, payment_method, combo_key, combo_discount_total.
@@ -252,49 +337,53 @@ def create_sale_from_lines(customer, seller, lines_data):
     from .models import InventoryExit, MovementType, Sale
 
     ensure_register_open(seller)
-    sale = Sale.objects.create(date=get_process_date(), customer=customer, seller=seller)
 
-    standalone_lines = []
-    combo_groups = defaultdict(list)
-    for line in lines_data:
-        combo_key = line.get("combo_key")
-        if combo_key:
-            combo_groups[combo_key].append(line)
-        else:
-            standalone_lines.append(line)
+    with transaction.atomic():
+        sale = Sale.objects.create(date=get_process_date(), customer=customer, seller=seller)
 
-    def create_exit(line, discount, combo_group=None):
-        movement_type = line["movement_type"]
-        is_sale = movement_type == MovementType.SALE
-        quantity = line["quantity"]
-        unit_price = line["unit_price"]
+        standalone_lines = []
+        combo_groups = defaultdict(list)
+        for line in lines_data:
+            combo_key = line.get("combo_key")
+            if combo_key:
+                combo_groups[combo_key].append(line)
+            else:
+                standalone_lines.append(line)
 
-        final_price = Decimal("0.00")
-        if is_sale:
-            final_price = max(unit_price * quantity - discount, Decimal("0.00"))
+        def create_exit(line, discount, combo_group=None):
+            movement_type = line["movement_type"]
+            is_sale = movement_type == MovementType.SALE
+            quantity = line["quantity"]
+            unit_price = line["unit_price"]
 
-        InventoryExit.objects.create(
-            sale=sale,
-            product=line["product"],
-            movement_type=movement_type,
-            quantity=quantity,
-            unit_price_snapshot=unit_price,
-            unit_cost_snapshot=line["product"].unit_cost,
-            discount_applied=discount if is_sale else Decimal("0.00"),
-            final_price=final_price,
-            payment_method=line.get("payment_method") if is_sale else None,
-            combo_group=combo_group,
-        )
+            final_price = Decimal("0.00")
+            if is_sale:
+                final_price = max(unit_price * quantity - discount, Decimal("0.00"))
 
-    for line in standalone_lines:
-        create_exit(line, discount=line.get("discount") or Decimal("0.00"))
+            InventoryExit.objects.create(
+                sale=sale,
+                product=line["product"],
+                movement_type=movement_type,
+                quantity=quantity,
+                unit_price_snapshot=unit_price,
+                unit_cost_snapshot=line["product"].unit_cost,
+                discount_applied=discount if is_sale else Decimal("0.00"),
+                final_price=final_price,
+                payment_method=line.get("payment_method") if is_sale else None,
+                combo_group=combo_group,
+            )
 
-    for group_lines in combo_groups.values():
-        combo_group_id = uuid.uuid4()
-        total_discount = group_lines[0].get("combo_discount_total") or Decimal("0.00")
-        weights = [line["unit_price"] * line["quantity"] for line in group_lines]
-        discounts = ComboProrationService.apply(weights, total_discount)
-        for line, discount in zip(group_lines, discounts):
-            create_exit(line, discount=discount, combo_group=combo_group_id)
+        for line in standalone_lines:
+            create_exit(line, discount=line.get("discount") or Decimal("0.00"))
+
+        for group_lines in combo_groups.values():
+            combo_group_id = uuid.uuid4()
+            total_discount = group_lines[0].get("combo_discount_total") or Decimal("0.00")
+            weights = [line["unit_price"] * line["quantity"] for line in group_lines]
+            discounts = ComboProrationService.apply(weights, total_discount)
+            for line, discount in zip(group_lines, discounts):
+                create_exit(line, discount=discount, combo_group=combo_group_id)
+
+        issue_document(sale)
 
     return sale

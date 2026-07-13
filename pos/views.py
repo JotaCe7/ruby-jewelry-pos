@@ -2,13 +2,28 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
 from rest_framework import mixins, viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import CashRegisterSession, ClosingPin, DraftSale, MovementType, RegisterClosing, Sale
-from .serializers import DraftSaleSerializer, RegisterClosingSerializer, SaleSerializer
+from .models import (
+    CashRegisterSession,
+    ClosingPin,
+    DraftSale,
+    MovementType,
+    RegisterClosing,
+    Sale,
+    SaleDocument,
+)
+from .serializers import (
+    DraftSaleSerializer,
+    RegisterClosingSerializer,
+    SaleDocumentSerializer,
+    SaleSerializer,
+    VoidDocumentSerializer,
+)
 from .services import (
     RegisterError,
     create_sale_from_lines,
@@ -18,21 +33,30 @@ from .services import (
     open_register,
     preview_closing,
     set_process_date,
+    void_document,
 )
 
 User = get_user_model()
 
 
 class SaleViewSet(viewsets.ModelViewSet):
-    # Any authenticated user (Admin or Vendedor) can ring up a sale; not
-    # scoped to "only my own sales" yet — see project memory for why.
+    # Any authenticated user can ring up a sale, but browsing/reprinting
+    # tickets is scoped to "only my own sales" for a Vendedor — same
+    # data-minimization precedent as removing Inventario access. Admin sees
+    # everyone's, needed for the Ventas/anulación screen.
     queryset = (
         Sale.objects.select_related("customer", "seller")
-        .prefetch_related("lines__product", "lines__payment_method")
+        .prefetch_related("lines__product", "lines__payment_method", "documents")
         .all()
     )
     serializer_class = SaleSerializer
     filterset_fields = ["customer", "seller", "date"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not self.request.user.is_staff:
+            return queryset.filter(seller=self.request.user)
+        return queryset
 
     def create(self, request, *args, **kwargs):
         try:
@@ -224,3 +248,37 @@ class RegisterClosingViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
     queryset = RegisterClosing.objects.select_related("seller", "performed_by").all()
     serializer_class = RegisterClosingSerializer
     filterset_fields = ["seller", "closing_type", "process_date"]
+
+
+class SaleDocumentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """Read-only browsing of issued comprobantes (for reprinting a Nota de
+    Venta or finding one to anular), plus the anulación action itself.
+    Scoped to "only my own sales" for a Vendedor, same as SaleViewSet."""
+
+    queryset = SaleDocument.objects.select_related("sale", "voided_by").all()
+    serializer_class = SaleDocumentSerializer
+    filterset_fields = ["document_type", "status", "sale"]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if not self.request.user.is_staff:
+            return queryset.filter(sale__seller=self.request.user)
+        return queryset
+
+    @action(detail=True, methods=["post"])
+    def void(self, request, pk=None):
+        document = self.get_object()
+        serializer = VoidDocumentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            document = void_document(
+                document,
+                reason=serializer.validated_data["reason"],
+                pin=serializer.validated_data["pin"],
+                performed_by=request.user,
+            )
+        except RegisterError as exc:
+            return Response({"detail": str(exc)}, status=400)
+
+        return Response(SaleDocumentSerializer(document).data)

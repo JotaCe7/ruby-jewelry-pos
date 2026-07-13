@@ -55,7 +55,7 @@ def get_summary(date_from, date_to):
     combined annotate()s) at this shop's scale, sidestepping the
     Sum-fan-out risk documented on Product.with_stock()."""
     exits = InventoryExit.objects.filter(
-        sale__date__gte=date_from, sale__date__lte=date_to
+        sale__date__gte=date_from, sale__date__lte=date_to, sale__is_voided=False
     ).select_related("product__supplier", "payment_method", "sale__seller")
 
     total_income = Decimal("0.00")

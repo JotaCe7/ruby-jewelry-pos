@@ -29,6 +29,12 @@ class Sale(TimeStampedModel):
     seller = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="sales", null=True, blank=True
     )
+    # Set only via void_document() voiding this sale's Nota de Venta — never
+    # edited directly. A voided sale's lines are kept for the audit trail
+    # (stock is restored via a compensating InventoryEntry, not by deleting
+    # these rows), but every revenue aggregation (closings, dashboard) must
+    # exclude it.
+    is_voided = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-date", "-id"]
@@ -199,3 +205,104 @@ class RegisterClosing(TimeStampedModel):
 
     def __str__(self):
         return f"{self.get_closing_type_display()} — {self.seller} — {self.process_date}"
+
+
+class DocumentType(models.TextChoices):
+    """Only NOTA_VENTA is actually issuable today (internal control, not a
+    SUNAT-valid fiscal document). The rest exist so wiring up real
+    electronic invoicing later — Boleta/Factura via a PSE like Nubefact,
+    and Nota de Crédito/Débito to adjust an already-issued document — is a
+    services/views change, not a schema migration."""
+
+    NOTA_VENTA = "NOTA_VENTA", _("Nota de Venta")
+    BOLETA = "BOLETA", _("Boleta de Venta")
+    FACTURA = "FACTURA", _("Factura")
+    NOTA_CREDITO = "NOTA_CREDITO", _("Nota de Crédito")
+    NOTA_DEBITO = "NOTA_DEBITO", _("Nota de Débito")
+
+
+class DocumentStatus(models.TextChoices):
+    ISSUED = "ISSUED", _("Emitido")
+    VOIDED = "VOIDED", _("Anulado")
+
+
+DEFAULT_DOCUMENT_SERIES = {
+    DocumentType.NOTA_VENTA: "NV01",
+    DocumentType.BOLETA: "B001",
+    DocumentType.FACTURA: "F001",
+    DocumentType.NOTA_CREDITO: "NC01",
+    DocumentType.NOTA_DEBITO: "ND01",
+}
+
+
+class DocumentSeries(models.Model):
+    """One row per document type — tracks the next correlativo so numbers
+    are gapless and never reused. `issue_document` locks this row
+    (select_for_update) before allocating a number, so two concurrent
+    sales can never receive the same one."""
+
+    document_type = models.CharField(max_length=15, choices=DocumentType.choices, unique=True)
+    series = models.CharField(max_length=10)
+    next_correlativo = models.PositiveIntegerField(default=1)
+
+    @classmethod
+    def get_or_create_default(cls, document_type):
+        obj, _created = cls.objects.get_or_create(
+            document_type=document_type,
+            defaults={"series": DEFAULT_DOCUMENT_SERIES[document_type]},
+        )
+        return obj
+
+    def __str__(self):
+        return f"{self.series} (next: {self.next_correlativo})"
+
+
+class SaleDocument(TimeStampedModel):
+    """The printable, sequentially-numbered comprobante for a Sale. Customer
+    identity is snapshotted at issuance so a later edit to the Customer
+    record never changes what was actually printed. `related_document` is
+    for a future Nota de Crédito/Débito, which always references the
+    document it adjusts — null for a standalone Nota de Venta/Boleta/
+    Factura."""
+
+    sale = models.ForeignKey(Sale, on_delete=models.PROTECT, related_name="documents")
+    document_type = models.CharField(max_length=15, choices=DocumentType.choices)
+    series = models.CharField(max_length=10)
+    correlativo = models.PositiveIntegerField()
+    status = models.CharField(
+        max_length=10, choices=DocumentStatus.choices, default=DocumentStatus.ISSUED
+    )
+
+    customer_name = models.CharField(max_length=150, blank=True)
+    customer_document_type = models.CharField(max_length=20, blank=True)
+    customer_document_number = models.CharField(max_length=20, blank=True)
+
+    # Prices are IGV-inclusive; subtotal/tax_amount are derived backward from
+    # `total` at issuance time (see pos/services.py:issue_document) and
+    # frozen from then on.
+    subtotal = models.DecimalField(max_digits=12, decimal_places=2)
+    tax_amount = models.DecimalField(max_digits=12, decimal_places=2)
+    total = models.DecimalField(max_digits=12, decimal_places=2)
+
+    related_document = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="adjustments"
+    )
+
+    voided_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="documents_voided",
+    )
+    void_reason = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["series", "correlativo"], name="unique_series_correlativo")
+        ]
+
+    def __str__(self):
+        return f"{self.series}-{self.correlativo:06d}"

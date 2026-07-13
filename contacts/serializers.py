@@ -12,4 +12,4 @@ class SupplierSerializer(serializers.ModelSerializer):
 class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
-        fields = ["id", "name", "tax_id", "phone", "email", "is_active"]
+        fields = ["id", "name", "document_type", "tax_id", "phone", "email", "is_active"]

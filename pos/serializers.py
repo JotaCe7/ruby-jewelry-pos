@@ -8,7 +8,7 @@ from catalogs.models import PaymentMethod
 from inventory.models import Product
 from inventory.serializers import ProductSerializer
 
-from .models import DraftSale, DraftSaleLine, InventoryExit, MovementType, RegisterClosing, Sale
+from .models import DraftSale, DraftSaleLine, InventoryExit, MovementType, RegisterClosing, Sale, SaleDocument
 from .services import create_sale_from_lines
 
 User = get_user_model()
@@ -58,12 +58,54 @@ class InventoryExitSerializer(serializers.ModelSerializer):
         ]
 
 
+class SaleDocumentSerializer(serializers.ModelSerializer):
+    document_type_display = serializers.CharField(source="get_document_type_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    voided_by_name = serializers.CharField(source="voided_by.username", read_only=True, default=None)
+    document_number = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SaleDocument
+        fields = [
+            "id",
+            "sale",
+            "document_type",
+            "document_type_display",
+            "series",
+            "correlativo",
+            "document_number",
+            "status",
+            "status_display",
+            "customer_name",
+            "customer_document_type",
+            "customer_document_number",
+            "subtotal",
+            "tax_amount",
+            "total",
+            "related_document",
+            "voided_at",
+            "voided_by",
+            "voided_by_name",
+            "void_reason",
+            "created_at",
+        ]
+
+    def get_document_number(self, obj) -> str:
+        return f"{obj.series}-{obj.correlativo:06d}"
+
+
+class VoidDocumentSerializer(serializers.Serializer):
+    reason = serializers.CharField()
+    pin = serializers.CharField()
+
+
 class SaleSerializer(serializers.ModelSerializer):
     lines = SaleLineInputSerializer(many=True, write_only=True)
     line_items = InventoryExitSerializer(source="lines", many=True, read_only=True)
     customer_name = serializers.CharField(source="customer.name", read_only=True, default=None)
     seller_name = serializers.CharField(source="seller.username", read_only=True, default=None)
     total = serializers.SerializerMethodField()
+    documents = SaleDocumentSerializer(many=True, read_only=True)
     # Admin-only retroactive-attribution path: force this sale onto another
     # seller's already-open (or admin-force-opened) register, confirmed with
     # that seller's own login password rather than the shared closing PIN.
@@ -83,10 +125,12 @@ class SaleSerializer(serializers.ModelSerializer):
             "lines",
             "line_items",
             "total",
+            "documents",
+            "is_voided",
             "seller_override",
             "seller_password",
         ]
-        read_only_fields = ["date"]
+        read_only_fields = ["date", "is_voided"]
 
     def get_total(self, obj) -> str:
         total = sum((line.final_price for line in obj.lines.all()), Decimal("0.00"))

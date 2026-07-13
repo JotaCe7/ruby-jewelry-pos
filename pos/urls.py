@@ -11,6 +11,7 @@ from .views import (
     RegisterPinView,
     RegisterSetProcessDateView,
     RegisterStatusView,
+    SaleDocumentViewSet,
     SaleViewSet,
 )
 
@@ -19,6 +20,7 @@ app_name = "pos"
 router = DefaultRouter()
 router.register("sales", SaleViewSet, basename="sale")
 router.register("register/closings", RegisterClosingViewSet, basename="register-closing")
+router.register("documents", SaleDocumentViewSet, basename="sale-document")
 
 urlpatterns = [
     path("draft/", DraftSaleView.as_view(), name="draft"),
