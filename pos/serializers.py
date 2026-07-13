@@ -170,6 +170,7 @@ class SaleSerializer(serializers.ModelSerializer):
 class RegisterClosingSerializer(serializers.ModelSerializer):
     seller_name = serializers.CharField(source="seller.username", read_only=True)
     performed_by_name = serializers.CharField(source="performed_by.username", read_only=True)
+    authorized_by_name = serializers.CharField(source="authorized_by.username", read_only=True, default=None)
     closing_type_display = serializers.CharField(source="get_closing_type_display", read_only=True)
 
     class Meta:
@@ -187,8 +188,13 @@ class RegisterClosingSerializer(serializers.ModelSerializer):
             "total_by_payment_method",
             "total_losses",
             "sale_count",
+            "document_breakdown",
+            "category_breakdown",
+            "product_breakdown",
             "performed_by",
             "performed_by_name",
+            "authorized_by",
+            "authorized_by_name",
             "created_at",
         ]
 

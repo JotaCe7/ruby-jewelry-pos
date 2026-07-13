@@ -9,8 +9,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import (
+    AdminPin,
     CashRegisterSession,
-    ClosingPin,
     DraftSale,
     MovementType,
     RegisterClosing,
@@ -197,6 +197,7 @@ class RegisterClosingActionView(APIView):
         mode = request.data.get("mode")
         pin = request.data.get("pin", "")
         seller_id = request.data.get("seller")
+        include_product_breakdown = bool(request.data.get("include_product_breakdown"))
 
         seller = request.user
         if seller_id and str(seller_id) != str(request.user.pk):
@@ -213,9 +214,17 @@ class RegisterClosingActionView(APIView):
 
         try:
             if mode == "PANTALLA":
-                totals = preview_closing(seller, closing_type, pin)
+                totals = preview_closing(
+                    seller, closing_type, pin, include_product_breakdown=include_product_breakdown
+                )
                 return Response(totals)
-            closing = execute_closing(seller, closing_type, pin, performed_by=request.user)
+            closing = execute_closing(
+                seller,
+                closing_type,
+                pin,
+                performed_by=request.user,
+                include_product_breakdown=include_product_breakdown,
+            )
         except RegisterError as exc:
             return Response({"detail": str(exc)}, status=400)
 
@@ -223,19 +232,22 @@ class RegisterClosingActionView(APIView):
 
 
 class RegisterPinView(APIView):
-    """Admin-only: set the shared closing PIN. GET only reports whether one
-    exists yet — the hash itself is never returned."""
+    """Admin-only: each admin manages their own PIN (the closing system
+    checks every admin's PIN to find who's authorizing — see
+    pos/models.py:AdminPin). GET reports whether the CALLING admin has set
+    one yet; the hash itself is never returned."""
 
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        return Response({"has_pin": bool(ClosingPin.get_or_create_default().pin_hash)})
+        pin = AdminPin.objects.filter(admin=request.user).first()
+        return Response({"has_pin": bool(pin and pin.pin_hash)})
 
     def post(self, request):
         pin = request.data.get("pin", "")
         if not pin or not pin.isdigit():
             return Response({"detail": "El PIN debe ser numérico."}, status=400)
-        ClosingPin.get_or_create_default().set_pin(pin)
+        AdminPin.get_or_create_for(request.user).set_pin(pin)
         return Response({"has_pin": True})
 
 
@@ -245,7 +257,7 @@ class RegisterClosingViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
     are never persisted."""
 
     permission_classes = [IsAdminUser]
-    queryset = RegisterClosing.objects.select_related("seller", "performed_by").all()
+    queryset = RegisterClosing.objects.select_related("seller", "performed_by", "authorized_by").all()
     serializer_class = RegisterClosingSerializer
     filterset_fields = ["seller", "closing_type", "process_date"]
 

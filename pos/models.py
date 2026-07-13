@@ -150,26 +150,41 @@ class CashRegisterSession(TimeStampedModel):
         return f"{self.seller} — {'abierta' if self.is_open else 'cerrada'}"
 
 
-class ClosingPin(models.Model):
-    """Singleton: the shared PIN required to authorize any X/Z closing
-    (both Pantalla-preview and Impresora-real modes) — deliberately not
-    tied to any single user's login password, so it survives account
-    changes and isn't the same secret as anyone's login."""
+class AdminPin(models.Model):
+    """One PIN per admin — deliberately not tied to that admin's login
+    password, so it survives account changes and isn't the same secret as
+    their login. Any admin's PIN authorizes an X/Z closing or an
+    anulación (find_by_pin checks every admin's hash), but a Cierre Z
+    additionally records *which* admin's PIN matched as its
+    `authorized_by` — the whole reason this moved from one shared PIN to
+    one per admin."""
 
+    admin = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="closing_pin"
+    )
     pin_hash = models.CharField(max_length=255, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod
-    def get_or_create_default(cls):
-        obj, _created = cls.objects.get_or_create(pk=1)
+    def get_or_create_for(cls, admin):
+        obj, _created = cls.objects.get_or_create(admin=admin)
         return obj
+
+    @classmethod
+    def find_by_pin(cls, raw_pin: str):
+        """Returns the admin whose PIN matches `raw_pin`, or None. Checking
+        every admin's hash in turn is fine at this shop's staff-count
+        scale."""
+        if not raw_pin:
+            return None
+        for admin_pin in cls.objects.exclude(pin_hash="").select_related("admin"):
+            if check_password(raw_pin, admin_pin.pin_hash):
+                return admin_pin.admin
+        return None
 
     def set_pin(self, raw_pin: str):
         self.pin_hash = make_password(raw_pin)
         self.save(update_fields=["pin_hash"])
-
-    def check_pin(self, raw_pin: str) -> bool:
-        return bool(self.pin_hash) and check_password(raw_pin, self.pin_hash)
 
 
 class ClosingType(models.TextChoices):
@@ -199,6 +214,31 @@ class RegisterClosing(TimeStampedModel):
     performed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="closings_performed"
     )
+    # Which admin's PIN authorized this closing — only ever set for a Z
+    # (an X doesn't need this level of sign-off). Distinct from
+    # performed_by: performed_by is whoever ran the closing (could be the
+    # seller themselves), authorized_by is the admin whose personal PIN
+    # was matched to confirm it.
+    authorized_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="closings_authorized",
+    )
+    # Per (document_type, series): first/last correlativo issued in the
+    # period, how many, and their combined amount (voided documents keep
+    # their correlativo in the first/last range but don't count toward
+    # amount — same "excluded from revenue" rule as everywhere else).
+    # Each item: {document_type, document_type_display, series,
+    # first_number, last_number, count, amount}.
+    document_breakdown = models.JSONField(default=list)
+    # Per ProductCategory: {category_id, category_name, quantity, amount}.
+    category_breakdown = models.JSONField(default=list)
+    # Per Product — opt-in at closing time (adds paper), so null means
+    # "not requested" rather than "empty": {product_id, sku, base_model,
+    # quantity, amount}.
+    product_breakdown = models.JSONField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

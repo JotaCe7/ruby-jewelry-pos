@@ -162,7 +162,96 @@ def _closing_period(seller, closing_type):
     return period_start, period_end
 
 
-def compute_closing_totals(seller, closing_type):
+def _document_breakdown(seller, period_start, period_end):
+    """Per (document_type, series) issued in the period: first/last
+    correlativo (voided documents keep their number in this range — a
+    correlativo is never skipped) and the combined amount of the
+    non-voided ones only."""
+    from .models import DocumentStatus, SaleDocument
+
+    documents = SaleDocument.objects.filter(
+        sale__seller=seller, created_at__gte=period_start, created_at__lt=period_end
+    ).order_by("correlativo")
+
+    groups = {}
+    for document in documents:
+        key = (document.document_type, document.series)
+        group = groups.get(key)
+        if group is None:
+            group = {
+                "document_type": document.document_type,
+                "document_type_display": document.get_document_type_display(),
+                "series": document.series,
+                "first_number": document.correlativo,
+                "last_number": document.correlativo,
+                "count": 0,
+                "amount": Decimal("0.00"),
+            }
+            groups[key] = group
+        group["first_number"] = min(group["first_number"], document.correlativo)
+        group["last_number"] = max(group["last_number"], document.correlativo)
+        group["count"] += 1
+        if document.status != DocumentStatus.VOIDED:
+            group["amount"] += document.total
+
+    return [{**group, "amount": str(group["amount"])} for group in groups.values()]
+
+
+def _sale_exits_in_period(seller, period_start, period_end):
+    """SALE-movement lines (never GIFT/DAMAGED, never voided) in the
+    period — the shared base query for category/product breakdowns."""
+    from .models import InventoryExit, MovementType
+
+    return InventoryExit.objects.filter(
+        sale__seller=seller,
+        sale__created_at__gte=period_start,
+        sale__created_at__lt=period_end,
+        sale__is_voided=False,
+        movement_type=MovementType.SALE,
+    )
+
+
+def _category_breakdown(seller, period_start, period_end):
+    exits = _sale_exits_in_period(seller, period_start, period_end).select_related(
+        "product__subcategory__category"
+    )
+
+    groups = defaultdict(lambda: {"quantity": 0, "amount": Decimal("0.00")})
+    for exit_row in exits:
+        category = exit_row.product.subcategory.category
+        bucket = groups[category.id]
+        bucket["category_name"] = category.name
+        bucket["quantity"] += exit_row.quantity
+        bucket["amount"] += exit_row.final_price
+
+    result = [
+        {"category_id": category_id, **bucket, "amount": str(bucket["amount"])}
+        for category_id, bucket in groups.items()
+    ]
+    result.sort(key=lambda row: Decimal(row["amount"]), reverse=True)
+    return result
+
+
+def _product_breakdown(seller, period_start, period_end):
+    exits = _sale_exits_in_period(seller, period_start, period_end).select_related("product")
+
+    groups = defaultdict(lambda: {"quantity": 0, "amount": Decimal("0.00")})
+    for exit_row in exits:
+        bucket = groups[exit_row.product_id]
+        bucket["sku"] = exit_row.product.sku
+        bucket["base_model"] = exit_row.product.base_model
+        bucket["quantity"] += exit_row.quantity
+        bucket["amount"] += exit_row.final_price
+
+    result = [
+        {"product_id": product_id, **bucket, "amount": str(bucket["amount"])}
+        for product_id, bucket in groups.items()
+    ]
+    result.sort(key=lambda row: Decimal(row["amount"]), reverse=True)
+    return result
+
+
+def compute_closing_totals(seller, closing_type, include_product_breakdown=False):
     from .models import InventoryExit, MovementType
 
     period_start, period_end = _closing_period(seller, closing_type)
@@ -194,29 +283,39 @@ def compute_closing_totals(seller, closing_type):
         "total_by_payment_method": {name: str(amount) for name, amount in by_payment_method.items()},
         "total_losses": str(total_losses),
         "sale_count": len(sale_ids),
+        "document_breakdown": _document_breakdown(seller, period_start, period_end),
+        "category_breakdown": _category_breakdown(seller, period_start, period_end),
+        "product_breakdown": (
+            _product_breakdown(seller, period_start, period_end) if include_product_breakdown else None
+        ),
     }
 
 
-def preview_closing(seller, closing_type, pin):
+def preview_closing(seller, closing_type, pin, include_product_breakdown=False):
     """Pantalla mode: validates the PIN and returns the totals without
     persisting anything or touching the register's is_open state."""
-    from .models import ClosingPin
+    from .models import AdminPin, ClosingType
 
-    if not ClosingPin.get_or_create_default().check_pin(pin):
+    admin = AdminPin.find_by_pin(pin)
+    if not admin:
         raise InvalidPinError("PIN incorrecto.")
-    return compute_closing_totals(seller, closing_type)
+    totals = compute_closing_totals(seller, closing_type, include_product_breakdown=include_product_breakdown)
+    if closing_type == ClosingType.Z:
+        totals["authorized_by_username"] = admin.username
+    return totals
 
 
-def execute_closing(seller, closing_type, pin, performed_by):
+def execute_closing(seller, closing_type, pin, performed_by, include_product_breakdown=False):
     """Impresora mode: validates the PIN, persists a RegisterClosing row,
     and — for a Z — closes the seller's session and advances the global
     process date once no session remains open for it."""
-    from .models import CashRegisterSession, ClosingPin, ClosingType, ProcessDate, RegisterClosing
+    from .models import AdminPin, CashRegisterSession, ClosingType, ProcessDate, RegisterClosing
 
-    if not ClosingPin.get_or_create_default().check_pin(pin):
+    admin = AdminPin.find_by_pin(pin)
+    if not admin:
         raise InvalidPinError("PIN incorrecto.")
 
-    totals = compute_closing_totals(seller, closing_type)
+    totals = compute_closing_totals(seller, closing_type, include_product_breakdown=include_product_breakdown)
 
     with transaction.atomic():
         closing = RegisterClosing.objects.create(
@@ -230,6 +329,10 @@ def execute_closing(seller, closing_type, pin, performed_by):
             total_losses=totals["total_losses"],
             sale_count=totals["sale_count"],
             performed_by=performed_by,
+            authorized_by=admin if closing_type == ClosingType.Z else None,
+            document_breakdown=totals["document_breakdown"],
+            category_breakdown=totals["category_breakdown"],
+            product_breakdown=totals["product_breakdown"],
         )
 
         if closing_type == ClosingType.Z:
@@ -288,13 +391,13 @@ def void_document(document, reason, pin, performed_by):
     (compute_closing_totals, dashboard) excludes it from then on."""
     from inventory.models import InventoryEntry
 
-    from .models import ClosingPin, DocumentStatus, DocumentType
+    from .models import AdminPin, DocumentStatus, DocumentType
 
     if document.document_type != DocumentType.NOTA_VENTA:
         raise DocumentNotVoidableError("Solo se pueden anular Notas de Venta por ahora.")
     if document.status == DocumentStatus.VOIDED:
         raise DocumentNotVoidableError("Este documento ya fue anulado.")
-    if not ClosingPin.get_or_create_default().check_pin(pin):
+    if not AdminPin.find_by_pin(pin):
         raise InvalidPinError("PIN incorrecto.")
 
     with transaction.atomic():
