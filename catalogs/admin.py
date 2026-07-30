@@ -19,8 +19,8 @@ class NamedCatalogAdmin(admin.ModelAdmin):
 
 @admin.register(PaymentMethod)
 class PaymentMethodAdmin(admin.ModelAdmin):
-    list_display = ["name", "is_active", "is_cash"]
-    list_filter = ["is_active", "is_cash"]
+    list_display = ["name", "is_active", "is_cash", "is_default"]
+    list_filter = ["is_active", "is_cash", "is_default"]
     search_fields = ["name"]
 
 

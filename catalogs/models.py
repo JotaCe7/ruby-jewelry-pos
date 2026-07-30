@@ -1,4 +1,4 @@
-from django.db import models
+from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
 
 from core.models import NamedCatalogModel
@@ -13,12 +13,27 @@ class ExpenseCategory(NamedCatalogModel):
 class PaymentMethod(NamedCatalogModel):
     # Drives the finance rule that a payment reference is required unless
     # the method is cash — matched by this flag rather than the editable
-    # `name`, since an admin could rename "Efectivo" at any time.
+    # `name`, since an admin could rename "Efectivo" at any time. NOT the
+    # same concept as `is_default` below: a method can require a reference
+    # (is_cash=False) and still be the one preselected in POS, e.g. "Caja"
+    # (a mall's shared register, which does give a voucher to reconcile).
     is_cash = models.BooleanField(default=False)
+    # Preselected payment method on a new POS ticket. Exclusive — saving a
+    # method with is_default=True clears it from every other one, so this
+    # never has to be enforced correctly by every caller (API, admin, shell).
+    is_default = models.BooleanField(default=False)
 
     class Meta(NamedCatalogModel.Meta):
         verbose_name = _("payment method")
         verbose_name_plural = _("payment methods")
+
+    def save(self, *args, **kwargs):
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if self.is_default:
+                PaymentMethod.objects.filter(is_default=True).exclude(pk=self.pk).update(
+                    is_default=False
+                )
 
 
 class ProductCategory(NamedCatalogModel):
