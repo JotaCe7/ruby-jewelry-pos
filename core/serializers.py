@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password as django_validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -7,6 +8,19 @@ from rest_framework import serializers
 from .models import DocumentType, Gender, UserProfile
 
 User = get_user_model()
+
+# Optional everywhere except production — lets staging/dev testing create
+# a user without filling in every field, while production keeps a
+# complete record for every real employee.
+PROFILE_FIELDS_REQUIRED_IN_PRODUCTION = [
+    "phone",
+    "birth_date",
+    "gender",
+    "document_type",
+    "document_number",
+    "hire_date",
+    "address",
+]
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -51,6 +65,23 @@ class UserSerializer(serializers.ModelSerializer):
             "hire_date",
             "address",
         ]
+
+    def validate(self, attrs):
+        if settings.ENVIRONMENT != "production":
+            return attrs
+        profile_data = attrs.get("profile", {})
+        existing_profile = getattr(self.instance, "profile", None) if self.instance else None
+        errors = {}
+        for field in PROFILE_FIELDS_REQUIRED_IN_PRODUCTION:
+            # A PATCH that doesn't touch this field falls back to what's
+            # already saved, so editing an unrelated field never trips
+            # this on a user created before it was required.
+            value = profile_data[field] if field in profile_data else getattr(existing_profile, field, None)
+            if value in (None, ""):
+                errors[field] = _("Obligatorio en producción.")
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
 
     def validate_password(self, value):
         if value:
