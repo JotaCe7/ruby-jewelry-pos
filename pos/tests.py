@@ -43,6 +43,10 @@ def make_product(sku="SKU-1", price="10.00", cost="4.00", category_name="Aretes"
     )
     return Product.objects.create(
         sku=sku,
+        # Not exercising the real EAN-13 generator here — just needs to be
+        # unique per sku so multiple make_product() calls in one test
+        # don't collide on Product.barcode's unique constraint.
+        barcode=sku.zfill(13)[:13],
         base_model=f"Producto {sku}",
         subcategory=subcategory,
         suggested_price=Decimal(price),
