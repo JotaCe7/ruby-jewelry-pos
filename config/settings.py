@@ -138,3 +138,18 @@ CORS_ALLOWED_ORIGINS = config(
     default="http://localhost:5173,http://127.0.0.1:5173",
     cast=Csv(),
 )
+
+# Same origins as CORS above — Django's own CSRF protection (used by
+# session-based views like /admin/, separate from the JWT-based API auth)
+# requires this explicitly since Django 4: without it, any POST from the
+# frontend's real origin (e.g. https://ruby-pos.tail431802.ts.net:8443)
+# fails CSRF verification.
+CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+
+# nginx terminates TLS and forwards to gunicorn over plain HTTP, setting
+# X-Forwarded-Proto (see nginx.conf) — without this, Django can't tell the
+# original request was HTTPS, which breaks CSRF's origin/scheme check and
+# would make secure cookies below never get sent.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
