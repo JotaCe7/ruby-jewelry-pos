@@ -12,6 +12,7 @@ class PriceTierInline(admin.TabularInline):
 class ProductAdmin(admin.ModelAdmin):
     list_display = [
         "sku",
+        "barcode",
         "base_model",
         "subcategory",
         "supplier",
@@ -21,7 +22,7 @@ class ProductAdmin(admin.ModelAdmin):
         "is_active",
     ]
     list_filter = ["is_active", "subcategory__category", "subcategory", "supplier"]
-    search_fields = ["sku", "base_model"]
+    search_fields = ["sku", "barcode", "base_model"]
     inlines = [PriceTierInline]
 
 

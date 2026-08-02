@@ -5,8 +5,8 @@ from django.test import TestCase
 from catalogs.models import ProductCategory, ProductSubcategory
 from pos.models import InventoryExit, MovementType, Sale
 
-from .models import InventoryAudit, InventoryEntry, Product
-from .services import apply_stock_entry_cost, get_current_stock
+from .models import BarcodeSequence, InventoryAudit, InventoryEntry, Product
+from .services import _ean13_check_digit, apply_stock_entry_cost, generate_barcode, get_current_stock
 
 
 def make_product(sku="SKU-1", cost="4.00", price="10.00"):
@@ -14,6 +14,10 @@ def make_product(sku="SKU-1", cost="4.00", price="10.00"):
     subcategory, _ = ProductSubcategory.objects.get_or_create(name="Aretes Tier", category=category)
     return Product.objects.create(
         sku=sku,
+        # Not exercising the real EAN-13 generator here — just needs to be
+        # unique per sku so multiple make_product() calls in one test
+        # don't collide on Product.barcode's unique constraint.
+        barcode=sku.zfill(13)[:13],
         base_model=f"Producto {sku}",
         subcategory=subcategory,
         suggested_price=Decimal(price),
@@ -132,3 +136,90 @@ class InventoryAuditApiTests(TestCase):
         # The shrinkage is netted directly in the stock formula — no
         # compensating InventoryExit row is created for it.
         self.assertEqual(get_current_stock(product), 18)
+
+
+class BarcodeGenerationTests(TestCase):
+    def test_checksum_matches_a_known_real_world_ean13(self):
+        # 4006381333931 is a commonly-cited real EAN-13 (Kinder Bueno) —
+        # verifies the checksum formula itself against ground truth,
+        # independent of this project's own generation logic.
+        self.assertEqual(_ean13_check_digit("400638133393"), "1")
+
+    def test_generate_barcode_is_13_digits_starting_with_the_internal_use_prefix(self):
+        barcode = generate_barcode()
+        self.assertEqual(len(barcode), 13)
+        self.assertTrue(barcode.isdigit())
+        self.assertTrue(barcode.startswith("20"))
+
+    def test_generate_barcode_is_sequential_and_never_repeats(self):
+        first = generate_barcode()
+        second = generate_barcode()
+        self.assertNotEqual(first, second)
+        self.assertEqual(int(second[2:12]), int(first[2:12]) + 1)
+
+    def test_generate_barcode_checksum_is_internally_valid(self):
+        barcode = generate_barcode()
+        self.assertEqual(_ean13_check_digit(barcode[:12]), barcode[12])
+
+    def test_sequence_survives_across_calls_via_the_singleton_row(self):
+        generate_barcode()
+        generate_barcode()
+        self.assertEqual(BarcodeSequence.objects.count(), 1)
+        self.assertEqual(BarcodeSequence.objects.get(pk=1).next_value, 3)
+
+
+class ProductBarcodeApiTests(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from rest_framework.test import APIClient
+
+        User = get_user_model()
+        self.admin = User.objects.create_user(username="admin2", password="x", is_staff=True)
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.admin)
+        category, _ = ProductCategory.objects.get_or_create(name="Aretes")
+        self.subcategory, _ = ProductSubcategory.objects.get_or_create(
+            name="Aretes Tier", category=category
+        )
+
+    def test_creating_without_a_barcode_auto_generates_one(self):
+        response = self.client.post(
+            "/api/inventory/products/",
+            {
+                "base_model": "Aretes S/5",
+                "subcategory": self.subcategory.id,
+                "suggested_price": "5.00",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(len(response.data["barcode"]), 13)
+
+    def test_creating_with_an_explicit_barcode_keeps_it_editable(self):
+        response = self.client.post(
+            "/api/inventory/products/",
+            {
+                "base_model": "Aretes S/8",
+                "subcategory": self.subcategory.id,
+                "suggested_price": "8.00",
+                "barcode": "7501234567890",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["barcode"], "7501234567890")
+
+    def test_duplicate_barcode_is_rejected(self):
+        make_product(sku="EXISTING", cost="1.00", price="1.00")
+        Product.objects.filter(sku="EXISTING").update(barcode="7501234567890")
+        response = self.client.post(
+            "/api/inventory/products/",
+            {
+                "base_model": "Aretes Duplicado",
+                "subcategory": self.subcategory.id,
+                "suggested_price": "5.00",
+                "barcode": "7501234567890",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)

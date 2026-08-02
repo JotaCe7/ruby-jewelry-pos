@@ -52,8 +52,29 @@ class ProductQuerySet(models.QuerySet):
         )
 
 
+class BarcodeSequence(models.Model):
+    """Singleton row (always pk=1) tracking the next sequential number for
+    auto-generated Product barcodes — see inventory.services.generate_barcode
+    for the full EAN-13 construction. Locked via select_for_update before
+    allocating, mirroring pos.models.DocumentSeries' correlativo pattern."""
+
+    next_value = models.PositiveIntegerField(default=1)
+
+    @classmethod
+    def get_or_create_singleton(cls):
+        obj, _created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return f"next: {self.next_value}"
+
+
 class Product(TimeStampedModel):
     sku = models.CharField(max_length=50, unique=True)
+    # Auto-generated (see inventory.services.generate_barcode) but editable,
+    # e.g. if a supplier's own barcode should be used instead — validated
+    # for uniqueness the same way sku is (ProductSerializer.validate_barcode).
+    barcode = models.CharField(max_length=13, unique=True)
     base_model = models.CharField(max_length=150)
     image = models.ImageField(upload_to="products/", null=True, blank=True)
     subcategory = models.ForeignKey(
