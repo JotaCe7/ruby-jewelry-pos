@@ -6,8 +6,15 @@ services:
       POSTGRES_DB: ${DB_NAME:-ruby_pos}
       POSTGRES_USER: ${DB_USER:-ruby_pos}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-ruby_pos}
+    # Bound to localhost only, and driven by a variable distinct from
+    # DB_PORT (which .env.<environment> also sets, to a *different*
+    # value — Postgres's internal container port — for Django's own DB
+    # connection). Reusing DB_PORT here previously caused Django's
+    # internal-port value to leak into this host-side publish, exposing
+    # Postgres on the VPS's public interface (mitigated only by luck of
+    # the firewall also blocking it — never rely on that alone).
     ports:
-      - "${DB_PORT:-5433}:5432"
+      - "127.0.0.1:${DB_HOST_PORT:-5433}:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
 
