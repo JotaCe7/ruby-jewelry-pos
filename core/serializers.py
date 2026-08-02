@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from .models import DocumentType, Gender, UserProfile
+from .models import DocumentType, Gender
 
 User = get_user_model()
 
@@ -73,9 +73,11 @@ class UserSerializer(serializers.ModelSerializer):
         existing_profile = getattr(self.instance, "profile", None) if self.instance else None
         errors = {}
         for field in PROFILE_FIELDS_REQUIRED_IN_PRODUCTION:
-            # A PATCH that doesn't touch this field falls back to what's
-            # already saved, so editing an unrelated field never trips
-            # this on a user created before it was required.
+            # A field not included in this request (e.g. the "activar/
+            # desactivar" toggle only ever sends is_active) falls back to
+            # its already-saved value — the requirement applies to the
+            # user's full record, not to whatever subset this one PATCH
+            # happens to touch.
             value = profile_data[field] if field in profile_data else getattr(existing_profile, field, None)
             if value in (None, ""):
                 errors[field] = _("Obligatorio en producción.")
@@ -92,12 +94,9 @@ class UserSerializer(serializers.ModelSerializer):
         return value
 
     def to_representation(self, instance):
-        # Belt-and-suspenders: the post_save signal (core/models.py) and
-        # the backfill migration should mean every User already has a
-        # profile, but this guards against ever 500ing on this screen if
-        # some entry point (shell, a future createsuperuser call) slips
-        # through without one.
-        UserProfile.objects.get_or_create(user=instance)
+        # The post_save signal (core/models.py) creates this at the same
+        # time as the User itself, so this is just accessing it — never
+        # a conditional/lazy creation path.
         return super().to_representation(instance)
 
     def create(self, validated_data):
@@ -107,8 +106,10 @@ class UserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"password": _("Requerido al crear un usuario.")})
         user = User(**validated_data)
         user.set_password(password)
-        user.save()
-        UserProfile.objects.update_or_create(user=user, defaults=profile_data)
+        user.save()  # the post_save signal creates user.profile right here
+        for attr, value in profile_data.items():
+            setattr(user.profile, attr, value)
+        user.profile.save()
         return user
 
     def update(self, instance, validated_data):
@@ -119,6 +120,8 @@ class UserSerializer(serializers.ModelSerializer):
         if password:
             instance.set_password(password)
         instance.save()
+        for attr, value in profile_data.items():
+            setattr(instance.profile, attr, value)
         if profile_data:
-            UserProfile.objects.update_or_create(user=instance, defaults=profile_data)
+            instance.profile.save()
         return instance

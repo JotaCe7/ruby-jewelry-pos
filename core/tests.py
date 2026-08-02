@@ -117,16 +117,10 @@ class UserAccountApiTests(TestCase):
         self.assertEqual(response.status_code, 201, response.data)
 
     @override_settings(ENVIRONMENT="production")
-    def test_editing_a_legacy_incomplete_profile_still_requires_completing_it(self):
-        # A user created before this rule existed has a blank profile —
-        # any edit in production still has to satisfy the requirement
-        # (using the *existing* saved value for fields not touched by
-        # this particular request), rather than being grandfathered in
-        # forever. Intentional: it nudges incomplete legacy records
-        # toward completion instead of letting them stay incomplete.
-        seller = User.objects.create_user(username="legacy_seller", password="x")
+    def test_editing_an_incomplete_profile_still_requires_completing_it(self):
+        seller = User.objects.create_user(username="seller3", password="x")
         response = self.client.patch(
-            f"/api/core/users/{seller.id}/", {"email": "legacy@example.com"}, format="json"
+            f"/api/core/users/{seller.id}/", {"email": "seller3@example.com"}, format="json"
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("phone", response.data)

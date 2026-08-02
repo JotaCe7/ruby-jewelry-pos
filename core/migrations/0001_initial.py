@@ -34,14 +34,4 @@ class Migration(migrations.Migration):
                 'verbose_name_plural': 'user profiles',
             },
         ),
-        migrations.RunPython(
-            code=lambda apps, schema_editor: apps.get_model("core", "UserProfile").objects.bulk_create(
-                [
-                    apps.get_model("core", "UserProfile")(user=user)
-                    for user in apps.get_model(settings.AUTH_USER_MODEL).objects.all()
-                ],
-                ignore_conflicts=True,
-            ),
-            reverse_code=migrations.RunPython.noop,
-        ),
     ]
