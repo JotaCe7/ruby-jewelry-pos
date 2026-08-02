@@ -12,6 +12,7 @@ urlpatterns = [
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/me/", CurrentUserView.as_view(), name="current_user"),
     path("api/auth/users/", UserListView.as_view(), name="user_list"),
+    path("api/core/", include("core.urls")),
     path("api/catalogs/", include("catalogs.urls")),
     path("api/contacts/", include("contacts.urls")),
     path("api/finance/", include("finance.urls")),
