@@ -42,6 +42,16 @@ This is an **API-only** backend. It has no templates or server-rendered pages �
 
    The API is available at `http://localhost:8000/api/`, and the Django admin at `http://localhost:8000/admin/`.
 
+## Deployment
+
+Three environments: **dev** (this machine — the "Getting started" steps above, never deployed anywhere), and **staging**/**production**, which both run on a single VPS, isolated from each other via separate Docker Compose projects and Docker networks. There's no separate repo or branch per environment — the same code deployed to staging is what gets promoted to production; only configuration (`.env`) differs.
+
+- Images are built and pushed to GHCR (`ghcr.io/jotace7/ruby-jewelry-pos-backend`) by GitHub Actions — never built locally for a real deploy.
+- `docker-compose.yml` (the same file used above) also defines the production `backend` service, gated behind `profiles: ["deploy"]`. A plain `docker compose up -d` — the local dev command above — is unaffected by this; it only ever starts `db`.
+- **To deploy:** GitHub → Actions tab → "Deploy Backend" workflow → "Run workflow" → pick the branch and the target environment (`staging` or `production`). That's the only manual step; the workflow builds the image, pushes it, and deploys it over SSH to the VPS.
+- Per-environment secrets/config (`DJANGO_SECRET_KEY`, DB credentials, allowed hosts, etc.) live in this repo's GitHub Settings → Environments → `staging` / `production` — never committed. See `.env.staging.example` / `.env.production.example` for the variables each environment needs.
+- Remote access (including outside business hours) is via [Tailscale](https://tailscale.com/) installed on the VPS — no public domain is used or needed.
+
 ## Project layout
 
 Each Django app owns one bounded area of the business domain:

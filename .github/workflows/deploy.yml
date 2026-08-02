@@ -1,0 +1,89 @@
+name: Deploy Backend
+
+# Manual only — click "Run workflow" in the Actions tab, pick the branch
+# (GitHub's own branch selector, next to the button) and the environment
+# below. Nothing deploys automatically on push.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente destino"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Scopes vars.*/secrets.* below to whichever GitHub Environment
+    # (Settings > Environments) matches the chosen input. If that
+    # Environment has required reviewers configured, the job pauses here
+    # for manual approval before continuing — recommended for "production".
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/jotace7/ruby-jewelry-pos-backend:${{ github.sha }}
+            ghcr.io/jotace7/ruby-jewelry-pos-backend:${{ inputs.environment }}
+
+      - name: Copy docker-compose.yml to the VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "/opt/ruby-pos/backend"
+
+      - name: Deploy on the VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/ruby-pos/backend
+
+            docker network inspect "${{ vars.DEPLOY_NETWORK }}" >/dev/null 2>&1 \
+              || docker network create "${{ vars.DEPLOY_NETWORK }}"
+
+            cat > .env.${{ inputs.environment }} <<'ENVEOF'
+            IMAGE_TAG=${{ github.sha }}
+            DEPLOY_ENV=${{ inputs.environment }}
+            DEPLOY_NETWORK=${{ vars.DEPLOY_NETWORK }}
+            DJANGO_SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+            DJANGO_DEBUG=False
+            DJANGO_ALLOWED_HOSTS=${{ vars.DJANGO_ALLOWED_HOSTS }}
+            CORS_ALLOWED_ORIGINS=${{ vars.CORS_ALLOWED_ORIGINS }}
+            DB_NAME=${{ vars.DB_NAME }}
+            DB_USER=${{ vars.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_HOST=db
+            DB_PORT=5432
+            ENVEOF
+
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            docker compose -p "ruby-${{ inputs.environment }}" --profile deploy --env-file ".env.${{ inputs.environment }}" pull backend
+            docker compose -p "ruby-${{ inputs.environment }}" --profile deploy --env-file ".env.${{ inputs.environment }}" up -d backend
+            docker compose -p "ruby-${{ inputs.environment }}" --profile deploy --env-file ".env.${{ inputs.environment }}" exec -T backend python manage.py migrate --noinput

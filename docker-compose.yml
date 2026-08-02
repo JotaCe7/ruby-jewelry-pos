@@ -11,5 +11,29 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  # Only used for staging/production deploys — never started by a plain
+  # `docker compose up`, so local dev (manage.py runserver + this file's
+  # `db` service) is completely unaffected by anything below.
+  # Deploy command: `docker compose -p ruby-<env> --profile deploy
+  # --env-file .env.<env> up -d`
+  backend:
+    profiles: ["deploy"]
+    image: ghcr.io/jotace7/ruby-jewelry-pos-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env.${DEPLOY_ENV:-staging}
+    depends_on:
+      - db
+    volumes:
+      - media:/app/media
+    networks:
+      - default
+      - shared
+
 volumes:
   db_data:
+  media:
+
+networks:
+  shared:
+    name: ${DEPLOY_NETWORK:-ruby-staging}
+    external: true

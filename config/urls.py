@@ -20,5 +20,6 @@ urlpatterns = [
     path("api/dashboard/", include("dashboard.urls")),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Served directly by Django (not offloaded to nginx/a CDN) since this is a
+# tiny internal app with 1-2 users — not worth the extra moving part.
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
