@@ -13,6 +13,13 @@ SECRET_KEY = config("DJANGO_SECRET_KEY", default="django-insecure-dev-key-change
 DEBUG = config("DJANGO_DEBUG", default=True, cast=bool)
 ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
+# "dev" | "staging" | "production" — distinct from DEBUG, which is False
+# in both staging and production and so can't tell them apart. Sourced
+# from DEPLOY_ENV, already set in .env.<environment> and passed through
+# to the container by each deploy workflow (docker-compose.yml's
+# env_file: .env.${DEPLOY_ENV}) — nothing new to wire up.
+ENVIRONMENT = config("DEPLOY_ENV", default="dev")
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
