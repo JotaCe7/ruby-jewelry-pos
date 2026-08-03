@@ -3,13 +3,7 @@ from decimal import Decimal
 from rest_framework import serializers
 
 from .models import InventoryAudit, InventoryEntry, PriceTier, Product
-from .services import (
-    apply_stock_entry_cost,
-    generate_barcode,
-    generate_sku,
-    get_current_stock,
-    get_unique_sku,
-)
+from .services import apply_stock_entry_cost, generate_barcode, get_current_stock
 
 
 class PriceTierSerializer(serializers.ModelSerializer):
@@ -19,9 +13,9 @@ class PriceTierSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    # Optional on input: create() auto-generates it from base_model/color/
-    # presentation when left blank.
-    sku = serializers.CharField(required=False, allow_blank=True)
+    # sku is read-only (Product.editable=False) — Product.save() assigns
+    # it as the parent subcategory's hierarchical code + a sequential
+    # suffix, never user input, per DRF auto-detecting editable=False.
     # Optional on input: create() auto-generates a sequential EAN-13 when
     # left blank — still editable, e.g. to use a supplier's own barcode.
     barcode = serializers.CharField(required=False, allow_blank=True)
@@ -77,16 +71,6 @@ class ProductSerializer(serializers.ModelSerializer):
     def get_needs_restock(self, obj) -> bool:
         return self.get_current_stock(obj) <= obj.min_stock
 
-    def validate_sku(self, value):
-        if not value:
-            return value
-        queryset = Product.objects.filter(sku=value)
-        if self.instance:
-            queryset = queryset.exclude(pk=self.instance.pk)
-        if queryset.exists():
-            raise serializers.ValidationError("A product with this SKU already exists.")
-        return value
-
     def validate_barcode(self, value):
         if not value:
             return value
@@ -98,13 +82,6 @@ class ProductSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        if not validated_data.get("sku"):
-            base_sku = generate_sku(
-                validated_data["base_model"],
-                getattr(validated_data.get("color"), "name", ""),
-                getattr(validated_data.get("presentation"), "name", ""),
-            )
-            validated_data["sku"] = get_unique_sku(base_sku)
         if not validated_data.get("barcode"):
             validated_data["barcode"] = generate_barcode()
         product = super().create(validated_data)

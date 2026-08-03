@@ -10,7 +10,7 @@ from .models import (
 )
 
 
-@admin.register(ExpenseCategory, ColorVariant, Presentation, ProductCategory)
+@admin.register(ExpenseCategory, ColorVariant, Presentation)
 class NamedCatalogAdmin(admin.ModelAdmin):
     list_display = ["name", "is_active"]
     list_filter = ["is_active"]
@@ -24,8 +24,15 @@ class PaymentMethodAdmin(admin.ModelAdmin):
     search_fields = ["name"]
 
 
+@admin.register(ProductCategory)
+class ProductCategoryAdmin(admin.ModelAdmin):
+    list_display = ["code", "name", "is_active"]
+    list_filter = ["is_active"]
+    search_fields = ["code", "name"]
+
+
 @admin.register(ProductSubcategory)
 class ProductSubcategoryAdmin(admin.ModelAdmin):
-    list_display = ["name", "category", "is_active"]
+    list_display = ["code", "name", "category", "is_active"]
     list_filter = ["is_active", "category"]
-    search_fields = ["name"]
+    search_fields = ["code", "name"]

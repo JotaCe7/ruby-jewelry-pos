@@ -223,3 +223,70 @@ class ProductBarcodeApiTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+
+
+class ProductHierarchicalCodeTests(TestCase):
+    """Product.sku — repurposed as the subcategory's code + a 3-digit
+    sequence scoped to that subcategory, auto-generated and never
+    editable afterward. Same reasoning as
+    catalogs.tests.HierarchicalCodeTests for Category/Subcategory."""
+
+    def setUp(self):
+        self.category = ProductCategory.objects.create(name="Aretes")
+        self.subcategory = ProductSubcategory.objects.create(
+            name="S/5", category=self.category
+        )
+
+    def _make(self, base_model="Aretes S/5"):
+        return Product.objects.create(
+            base_model=base_model,
+            subcategory=self.subcategory,
+            suggested_price=Decimal("5.00"),
+            min_stock=0,
+        )
+
+    def test_products_get_sequential_codes_scoped_to_their_subcategory(self):
+        first = self._make()
+        second = self._make()
+        self.assertEqual(first.sku, f"{self.subcategory.code}001")
+        self.assertEqual(second.sku, f"{self.subcategory.code}002")
+
+    def test_a_different_subcategory_starts_its_own_sequence_at_001(self):
+        other_subcategory = ProductSubcategory.objects.create(
+            name="S/8", category=self.category
+        )
+        self._make()
+        other_product = Product.objects.create(
+            base_model="Aretes S/8",
+            subcategory=other_subcategory,
+            suggested_price=Decimal("8.00"),
+            min_stock=0,
+        )
+        self.assertEqual(other_product.sku, f"{other_subcategory.code}001")
+
+    def test_deleting_a_product_never_frees_its_number_for_reuse(self):
+        first = self._make()
+        self._make()
+        first.delete()
+        third = self._make()
+        # Count-based numbering would have reused "...001" (now only one
+        # sibling remains) — MAX-based correctly continues from "...002".
+        self.assertEqual(third.sku, f"{self.subcategory.code}003")
+
+    def test_sku_cannot_be_changed_via_the_api(self):
+        from django.contrib.auth import get_user_model
+        from rest_framework.test import APIClient
+
+        User = get_user_model()
+        admin = User.objects.create_user(username="admin3", password="x", is_staff=True)
+        client = APIClient()
+        client.force_authenticate(user=admin)
+        product = self._make()
+
+        response = client.patch(
+            f"/api/inventory/products/{product.id}/", {"sku": "9999999"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        product.refresh_from_db()
+        self.assertEqual(product.sku, f"{self.subcategory.code}001")
