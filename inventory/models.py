@@ -1,5 +1,5 @@
 from django.core.validators import MinValueValidator
-from django.db import models
+from django.db import models, transaction
 from django.db.models import IntegerField, OuterRef, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext_lazy as _
@@ -70,7 +70,15 @@ class BarcodeSequence(models.Model):
 
 
 class Product(TimeStampedModel):
-    sku = models.CharField(max_length=50, unique=True)
+    # Auto-generated as the parent subcategory's code + a 3-digit
+    # sequential number scoped to that subcategory (e.g. "0101001",
+    # "0101002" under subcategory "0101") — never editable afterward.
+    # Replaces the old abbreviation-based generator (e.g. "ARE-FAN"):
+    # the field name stays `sku` since it's referenced throughout
+    # pos/dashboard/inventory, but what it holds and how it behaves both
+    # changed. editable=False also makes DRF's ModelSerializer expose
+    # this read-only automatically.
+    sku = models.CharField(max_length=50, unique=True, editable=False, blank=True)
     # Auto-generated (see inventory.services.generate_barcode) but editable,
     # e.g. if a supplier's own barcode should be used instead — validated
     # for uniqueness the same way sku is (ProductSerializer.validate_barcode).
@@ -103,6 +111,25 @@ class Product(TimeStampedModel):
 
     def __str__(self):
         return f"{self.sku} — {self.base_model}"
+
+    def save(self, *args, **kwargs):
+        if not self.pk and not self.sku:
+            with transaction.atomic():
+                subcategory = ProductSubcategory.objects.select_for_update().get(
+                    pk=self.subcategory_id
+                )
+                # MAX-based, not count()-based: a deleted sibling must
+                # never free up its number for reuse.
+                existing_suffixes = [
+                    int(code[len(subcategory.code) :])
+                    for code in Product.objects.filter(subcategory=subcategory).values_list(
+                        "sku", flat=True
+                    )
+                    if code
+                ]
+                next_suffix = max(existing_suffixes, default=0) + 1
+                self.sku = subcategory.code + str(next_suffix).zfill(3)
+        super().save(*args, **kwargs)
 
 
 class PriceTier(TimeStampedModel):

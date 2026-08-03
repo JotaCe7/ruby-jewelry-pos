@@ -1,46 +1,6 @@
-import re
-import unicodedata
 from decimal import Decimal
 
 from django.db.models import Sum
-
-
-def _strip_accents(text: str) -> str:
-    return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
-
-
-def _abbreviate(text: str, single_word_length: int = 3) -> str:
-    """Multi-word text ('Arete Gota') becomes initials ('AG'); a single
-    word ('Rojo') is truncated ('ROJ')."""
-    words = re.findall(r"[A-Za-z0-9]+", _strip_accents(text).upper())
-    if not words:
-        return "X"
-    if len(words) > 1:
-        return "".join(word[0] for word in words)[:4]
-    return words[0][:single_word_length]
-
-
-def generate_sku(base_model: str, color_name: str = "", presentation_name: str = "") -> str:
-    parts = [_abbreviate(base_model)]
-    if color_name:
-        parts.append(_abbreviate(color_name))
-    if presentation_name:
-        parts.append(_abbreviate(presentation_name))
-    return "-".join(parts)
-
-
-def get_unique_sku(base_sku: str, exclude_pk=None) -> str:
-    from .models import Product
-
-    candidate = base_sku
-    suffix = 2
-    queryset = Product.objects.all()
-    if exclude_pk:
-        queryset = queryset.exclude(pk=exclude_pk)
-    while queryset.filter(sku=candidate).exists():
-        candidate = f"{base_sku}-{suffix}"
-        suffix += 1
-    return candidate
 
 
 def _ean13_check_digit(digits12: str) -> str:
