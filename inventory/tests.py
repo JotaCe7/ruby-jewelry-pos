@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 
 from catalogs.models import ProductCategory, ProductSubcategory
 from pos.models import InventoryExit, MovementType, Sale
@@ -290,3 +290,47 @@ class ProductHierarchicalCodeTests(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         product.refresh_from_db()
         self.assertEqual(product.sku, f"{self.subcategory.code}001")
+
+
+class GenerateBarcodeOutsideAnAmbientTransactionTests(TransactionTestCase):
+    """Regression test for a real bug: generate_barcode() used
+    select_for_update() without wrapping it in its own
+    transaction.atomic(), which only worked by accident under plain
+    TestCase (every test method there already runs inside an implicit
+    outer transaction, which happily hid the missing one). A real
+    request via ProductSerializer.create() has no such ambient
+    transaction, so every product creation through the API failed with
+    TransactionManagementError until this was fixed. TransactionTestCase
+    (unlike TestCase) does NOT wrap tests in a transaction, so this is
+    the one test in the suite that actually exercises that gap."""
+
+    def test_generate_barcode_works_with_no_ambient_transaction(self):
+        barcode = generate_barcode()
+        self.assertEqual(len(barcode), 13)
+
+    def test_creating_a_product_via_the_api_works_with_no_ambient_transaction(self):
+        from django.contrib.auth import get_user_model
+        from rest_framework.test import APIClient
+
+        User = get_user_model()
+        admin = User.objects.create_user(username="admin4", password="x", is_staff=True)
+        client = APIClient()
+        client.force_authenticate(user=admin)
+        category = ProductCategory.objects.create(name="Aretes")
+        subcategory = ProductSubcategory.objects.create(name="S/5", category=category)
+
+        response = client.post(
+            "/api/inventory/products/",
+            {
+                "base_model": "Aretes S/5",
+                "subcategory": subcategory.id,
+                "color": None,
+                "presentation": None,
+                "supplier": None,
+                "suggested_price": "5.00",
+                "min_stock": 0,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)

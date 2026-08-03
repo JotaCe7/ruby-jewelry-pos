@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Sum
 
 
@@ -25,10 +26,17 @@ def generate_barcode() -> str:
     from .models import BarcodeSequence
 
     BarcodeSequence.get_or_create_singleton()
-    sequence_row = BarcodeSequence.objects.select_for_update().get(pk=1)
-    number = sequence_row.next_value
-    sequence_row.next_value += 1
-    sequence_row.save(update_fields=["next_value"])
+    # select_for_update requires an open transaction — unlike
+    # ProductCategory/ProductSubcategory/Product's own save() overrides,
+    # which wrap their locking in transaction.atomic() themselves, this
+    # is a plain function that can be called from anywhere (e.g.
+    # ProductSerializer.create(), which DRF does not wrap in a
+    # transaction by default), so it has to open its own.
+    with transaction.atomic():
+        sequence_row = BarcodeSequence.objects.select_for_update().get(pk=1)
+        number = sequence_row.next_value
+        sequence_row.next_value += 1
+        sequence_row.save(update_fields=["next_value"])
 
     body = f"20{number:010d}"
     return body + _ean13_check_digit(body)
