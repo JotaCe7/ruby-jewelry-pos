@@ -42,6 +42,22 @@ def generate_barcode() -> str:
     return body + _ean13_check_digit(body)
 
 
+def preview_next_product_code(subcategory) -> str:
+    """Best-effort preview of what Product.save() would assign to `sku`
+    next — mirrors that MAX-based logic exactly (must stay in sync with
+    it if it ever changes), without locking anything, since nothing is
+    actually being created yet."""
+    from .models import Product
+
+    existing_suffixes = [
+        int(code[len(subcategory.code) :])
+        for code in Product.objects.filter(subcategory=subcategory).values_list("sku", flat=True)
+        if code
+    ]
+    next_suffix = max(existing_suffixes, default=0) + 1
+    return subcategory.code + str(next_suffix).zfill(3)
+
+
 def get_current_stock(product) -> int:
     """Single-instance equivalent of ProductQuerySet.with_stock(), for use
     right after saving a row that a fresh query wouldn't reflect yet."""

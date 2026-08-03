@@ -98,3 +98,39 @@ class HierarchicalCodeTests(TestCase):
         self.assertEqual(response.status_code, 200, response.data)
         aretes.refresh_from_db()
         self.assertEqual(aretes.code, "01")
+
+
+class PreviewCodeTests(TestCase):
+    """The create-form preview endpoints must show what a code *would*
+    be without ever actually consuming a sequence number — calling
+    preview repeatedly must keep returning the same value until
+    something is actually saved."""
+
+    def setUp(self):
+        admin = User.objects.create_user(username="admin2", password="x", is_staff=True)
+        self.client = APIClient()
+        self.client.force_authenticate(user=admin)
+
+    def test_category_preview_does_not_consume_the_sequence(self):
+        first = self.client.get("/api/catalogs/product-categories/preview_code/")
+        second = self.client.get("/api/catalogs/product-categories/preview_code/")
+        self.assertEqual(first.data["code"], "01")
+        self.assertEqual(second.data["code"], "01")
+
+        ProductCategory.objects.create(name="Aretes")
+        third = self.client.get("/api/catalogs/product-categories/preview_code/")
+        self.assertEqual(third.data["code"], "02")
+
+    def test_subcategory_preview_does_not_consume_the_sequence(self):
+        aretes = ProductCategory.objects.create(name="Aretes")
+        response = self.client.get(
+            "/api/catalogs/product-subcategories/preview_code/", {"category": aretes.id}
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["code"], "0101")
+
+        ProductSubcategory.objects.create(name="S/5", category=aretes)
+        response = self.client.get(
+            "/api/catalogs/product-subcategories/preview_code/", {"category": aretes.id}
+        )
+        self.assertEqual(response.data["code"], "0102")

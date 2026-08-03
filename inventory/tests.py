@@ -334,3 +334,33 @@ class GenerateBarcodeOutsideAnAmbientTransactionTests(TransactionTestCase):
         )
 
         self.assertEqual(response.status_code, 201, response.data)
+
+
+class ProductPreviewCodeTests(TestCase):
+    """Mirrors catalogs.tests.PreviewCodeTests, one level down — must
+    never consume a sequence number, only show what it would be."""
+
+    def test_preview_does_not_consume_the_sequence(self):
+        from django.contrib.auth import get_user_model
+        from rest_framework.test import APIClient
+
+        User = get_user_model()
+        admin = User.objects.create_user(username="admin5", password="x", is_staff=True)
+        client = APIClient()
+        client.force_authenticate(user=admin)
+        category = ProductCategory.objects.create(name="Aretes")
+        subcategory = ProductSubcategory.objects.create(name="S/5", category=category)
+
+        first = client.get("/api/inventory/products/preview_code/", {"subcategory": subcategory.id})
+        second = client.get("/api/inventory/products/preview_code/", {"subcategory": subcategory.id})
+        self.assertEqual(first.data["code"], f"{subcategory.code}001")
+        self.assertEqual(second.data["code"], f"{subcategory.code}001")
+
+        Product.objects.create(
+            base_model="Aretes S/5",
+            subcategory=subcategory,
+            suggested_price=Decimal("5.00"),
+            min_stock=0,
+        )
+        third = client.get("/api/inventory/products/preview_code/", {"subcategory": subcategory.id})
+        self.assertEqual(third.data["code"], f"{subcategory.code}002")
