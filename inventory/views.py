@@ -1,6 +1,9 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
+from rest_framework.response import Response
 
+from catalogs.models import ProductSubcategory
 from core.permissions import IsAdminOrReadOnly
 
 from .filters import ProductFilter
@@ -11,6 +14,7 @@ from .serializers import (
     PriceTierSerializer,
     ProductSerializer,
 )
+from .services import preview_next_product_code
 
 
 class ProductViewSet(viewsets.ModelViewSet):
@@ -28,6 +32,17 @@ class ProductViewSet(viewsets.ModelViewSet):
             .select_related("subcategory__category", "color", "presentation", "supplier")
             .prefetch_related("price_tiers")
         )
+
+    @action(detail=False, methods=["get"], permission_classes=[IsAdminUser])
+    def preview_code(self, request):
+        subcategory_id = request.query_params.get("subcategory")
+        if not subcategory_id:
+            return Response({"detail": "subcategory is required."}, status=400)
+        try:
+            subcategory = ProductSubcategory.objects.get(pk=subcategory_id)
+        except ProductSubcategory.DoesNotExist:
+            return Response({"detail": "subcategory not found."}, status=404)
+        return Response({"code": preview_next_product_code(subcategory)})
 
 
 class PriceTierViewSet(viewsets.ModelViewSet):

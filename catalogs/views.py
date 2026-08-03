@@ -1,5 +1,7 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
+from rest_framework.response import Response
 
 from core.permissions import IsAdminOrReadOnly
 
@@ -19,6 +21,7 @@ from .serializers import (
     ProductCategorySerializer,
     ProductSubcategorySerializer,
 )
+from .services import preview_next_category_code, preview_next_subcategory_code
 
 
 class ExpenseCategoryViewSet(viewsets.ModelViewSet):
@@ -41,12 +44,27 @@ class ProductCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = ProductCategorySerializer
     permission_classes = [IsAdminOrReadOnly]
 
+    @action(detail=False, methods=["get"], permission_classes=[IsAdminUser])
+    def preview_code(self, request):
+        return Response({"code": preview_next_category_code()})
+
 
 class ProductSubcategoryViewSet(viewsets.ModelViewSet):
     queryset = ProductSubcategory.objects.select_related("category").all()
     serializer_class = ProductSubcategorySerializer
     filterset_fields = ["category"]
     permission_classes = [IsAdminOrReadOnly]
+
+    @action(detail=False, methods=["get"], permission_classes=[IsAdminUser])
+    def preview_code(self, request):
+        category_id = request.query_params.get("category")
+        if not category_id:
+            return Response({"detail": "category is required."}, status=400)
+        try:
+            category = ProductCategory.objects.get(pk=category_id)
+        except ProductCategory.DoesNotExist:
+            return Response({"detail": "category not found."}, status=404)
+        return Response({"code": preview_next_subcategory_code(category)})
 
 
 class ColorVariantViewSet(viewsets.ModelViewSet):

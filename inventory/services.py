@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import Sum
 
 
@@ -25,13 +26,36 @@ def generate_barcode() -> str:
     from .models import BarcodeSequence
 
     BarcodeSequence.get_or_create_singleton()
-    sequence_row = BarcodeSequence.objects.select_for_update().get(pk=1)
-    number = sequence_row.next_value
-    sequence_row.next_value += 1
-    sequence_row.save(update_fields=["next_value"])
+    # select_for_update requires an open transaction — unlike
+    # ProductCategory/ProductSubcategory/Product's own save() overrides,
+    # which wrap their locking in transaction.atomic() themselves, this
+    # is a plain function that can be called from anywhere (e.g.
+    # ProductSerializer.create(), which DRF does not wrap in a
+    # transaction by default), so it has to open its own.
+    with transaction.atomic():
+        sequence_row = BarcodeSequence.objects.select_for_update().get(pk=1)
+        number = sequence_row.next_value
+        sequence_row.next_value += 1
+        sequence_row.save(update_fields=["next_value"])
 
     body = f"20{number:010d}"
     return body + _ean13_check_digit(body)
+
+
+def preview_next_product_code(subcategory) -> str:
+    """Best-effort preview of what Product.save() would assign to `sku`
+    next — mirrors that MAX-based logic exactly (must stay in sync with
+    it if it ever changes), without locking anything, since nothing is
+    actually being created yet."""
+    from .models import Product
+
+    existing_suffixes = [
+        int(code[len(subcategory.code) :])
+        for code in Product.objects.filter(subcategory=subcategory).values_list("sku", flat=True)
+        if code
+    ]
+    next_suffix = max(existing_suffixes, default=0) + 1
+    return subcategory.code + str(next_suffix).zfill(3)
 
 
 def get_current_stock(product) -> int:
