@@ -42,9 +42,9 @@ User = get_user_model()
 
 class SaleViewSet(viewsets.ModelViewSet):
     # Any authenticated user can ring up a sale, but browsing/reprinting
-    # tickets is scoped to "only my own sales" for a Vendedor — same
-    # data-minimization precedent as removing Inventario access. Admin sees
-    # everyone's, needed for the Ventas/anulación screen.
+    # tickets is scoped to "only my own sales" for a Seller — same
+    # data-minimization precedent as removing Inventory access. Admin sees
+    # everyone's, needed for the Sales/void screen.
     queryset = (
         Sale.objects.select_related("customer", "seller")
         .prefetch_related("lines__product", "lines__payment_method", "documents")
@@ -135,7 +135,7 @@ class DraftSaleFinalizeView(APIView):
 class RegisterStatusView(APIView):
     """The caller's own register status plus the current global process
     date — polled by the frontend to decide whether to show the
-    'abrir caja' gate before letting a Vendedor into the POS ticket."""
+    'open register' gate before letting a Seller into the POS ticket."""
 
     def get(self, request):
         session = CashRegisterSession.objects.filter(seller=request.user).first()
@@ -265,9 +265,9 @@ class RegisterClosingViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
 
 
 class SaleDocumentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
-    """Read-only browsing of issued comprobantes (for reprinting a Nota de
-    Venta or finding one to anular), plus the anulación action itself.
-    Scoped to "only my own sales" for a Vendedor, same as SaleViewSet."""
+    """Read-only browsing of issued documents (for reprinting a Sales
+    Receipt or finding one to void), plus the void action itself.
+    Scoped to "only my own sales" for a Seller, same as SaleViewSet."""
 
     queryset = SaleDocument.objects.select_related("sale", "voided_by").all()
     serializer_class = SaleDocumentSerializer

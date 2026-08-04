@@ -77,7 +77,7 @@ class ComboProrationServiceTests(TestCase):
 
 class RegisterLifecycleTests(TestCase):
     def setUp(self):
-        self.seller = User.objects.create_user(username="vendedor1", password="x")
+        self.seller = User.objects.create_user(username="seller1", password="x")
 
     def test_open_register_sets_open_and_opened_at(self):
         session = open_register(self.seller)
@@ -108,7 +108,7 @@ class RegisterLifecycleTests(TestCase):
             open_register(self.seller)
 
     def test_open_register_blocked_when_another_session_still_open_on_older_date(self):
-        other_seller = User.objects.create_user(username="vendedor2", password="x")
+        other_seller = User.objects.create_user(username="seller2", password="x")
         process_date = ProcessDate.get_or_create_default()
         process_date.current_date = timezone.localdate() - timedelta(days=1)
         process_date.save()
@@ -128,7 +128,7 @@ class RegisterLifecycleTests(TestCase):
 
 class CreateSaleFromLinesTests(TestCase):
     def setUp(self):
-        self.seller = User.objects.create_user(username="vendedor1", password="x")
+        self.seller = User.objects.create_user(username="seller1", password="x")
         self.payment_method = make_payment_method()
         ProcessDate.get_or_create_default()
 
@@ -215,7 +215,7 @@ class CreateSaleFromLinesTests(TestCase):
 
 class ClosingTotalsReconciliationTests(TestCase):
     def setUp(self):
-        self.seller = User.objects.create_user(username="vendedor1", password="x")
+        self.seller = User.objects.create_user(username="seller1", password="x")
         self.admin = User.objects.create_user(username="admin1", password="x", is_staff=True)
         AdminPin.get_or_create_for(self.admin).set_pin("1234")
         ProcessDate.get_or_create_default()
@@ -305,7 +305,7 @@ class ClosingTotalsReconciliationTests(TestCase):
         self.assertEqual(get_process_date(), before + timedelta(days=1))
 
     def test_z_does_not_advance_process_date_while_another_seller_still_open(self):
-        other_seller = User.objects.create_user(username="vendedor2", password="x")
+        other_seller = User.objects.create_user(username="seller2", password="x")
         open_register(other_seller)
         before = get_process_date()
 
@@ -316,7 +316,7 @@ class ClosingTotalsReconciliationTests(TestCase):
 
 class VoidDocumentTests(TestCase):
     def setUp(self):
-        self.seller = User.objects.create_user(username="vendedor1", password="x")
+        self.seller = User.objects.create_user(username="seller1", password="x")
         self.admin = User.objects.create_user(username="admin1", password="x", is_staff=True)
         AdminPin.get_or_create_for(self.admin).set_pin("1234")
         ProcessDate.get_or_create_default()

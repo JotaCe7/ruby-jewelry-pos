@@ -28,7 +28,7 @@ class Sale(TimeStampedModel):
     seller = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="sales", null=True, blank=True
     )
-    # Set only via void_document() voiding this sale's Nota de Venta — never
+    # Set only via void_document() voiding this sale's Sales Receipt — never
     # edited directly. A voided sale's lines are kept for the audit trail
     # (stock is restored via a compensating InventoryEntry, not by deleting
     # these rows), but every revenue aggregation (closings, dashboard) must

@@ -79,7 +79,7 @@ def ensure_register_open(seller):
 
 
 def open_register(user):
-    """Self-service open. A Vendedor can only open onto 'today'; if the
+    """Self-service open. A Seller can only open onto 'today'; if the
     global process date is behind today and nobody else has a session open
     (i.e. the gap days had no activity at all), it jumps straight to today
     instead of forcing empty closings for the skipped days."""

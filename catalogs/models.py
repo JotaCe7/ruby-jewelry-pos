@@ -56,8 +56,8 @@ class ProductCategory(NamedCatalogModel):
     # picker in hierarchical mode.
     image = models.ImageField(upload_to="product_categories/", null=True, blank=True)
     # Auto-generated (2-digit sequential, e.g. "01") and never editable
-    # afterward — the user's own words: "algo que nunca cambie". Distinct
-    # from `name`, which can be freely corrected/renamed at any time.
+    # afterward — distinct from `name`, which can be freely corrected or
+    # renamed at any time.
     # editable=False also makes DRF's ModelSerializer expose this
     # read-only automatically.
     code = models.CharField(max_length=2, unique=True, editable=False, blank=True)

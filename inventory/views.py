@@ -20,7 +20,7 @@ from .services import preview_next_product_code
 
 
 class ProductViewSet(viewsets.ModelViewSet):
-    # A Vendedor needs to browse the catalog (stock/price) from the POS
+    # A Seller needs to browse the catalog (stock/price) from the POS
     # picker, but only Admin edits products.
     serializer_class = ProductSerializer
     filterset_class = ProductFilter

@@ -38,7 +38,7 @@ class DocumentType(models.TextChoices):
 
 class UserProfile(TimeStampedModel):
     # Extends Django's built-in User with the extra fields this business
-    # wants on file for Admin/Vendedor accounts, without swapping
+    # wants on file for Admin/Seller accounts, without swapping
     # AUTH_USER_MODEL — too risky to introduce this deep into a live
     # project (every existing FK to User, and the users table itself,
     # would need migrating). A one-to-one side table is additive instead.
