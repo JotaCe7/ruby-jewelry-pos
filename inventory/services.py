@@ -63,8 +63,9 @@ def get_current_stock(product) -> int:
     right after saving a row that a fresh query wouldn't reflect yet."""
     entries_total = product.entries.aggregate(total=Sum("quantity"))["total"] or 0
     audit_loss_total = product.audits.aggregate(total=Sum("loss_adjustment"))["total"] or 0
+    damages_total = product.damages.aggregate(total=Sum("quantity"))["total"] or 0
     exits_total = product.exits.aggregate(total=Sum("quantity"))["total"] or 0
-    return entries_total - audit_loss_total - exits_total
+    return entries_total - audit_loss_total - damages_total - exits_total
 
 
 def apply_stock_entry_cost(product, stock_before: int, entry_quantity: int, entry_unit_cost: Decimal):

@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from .models import InventoryAudit, InventoryEntry, PriceTier, Product
+from .models import InventoryAudit, InventoryDamage, InventoryEntry, PriceTier, Product
 from .services import apply_stock_entry_cost, generate_barcode, get_current_stock
 
 
@@ -135,4 +135,33 @@ class InventoryAuditSerializer(serializers.ModelSerializer):
         validated_data["loss_value"] = (Decimal(loss_adjustment) * product.unit_cost).quantize(
             Decimal("0.01")
         )
+        return super().create(validated_data)
+
+
+class InventoryDamageSerializer(serializers.ModelSerializer):
+    product_sku = serializers.CharField(source="product.sku", read_only=True)
+    responsible_username = serializers.CharField(source="responsible.username", read_only=True, default=None)
+    reported_by_username = serializers.CharField(source="reported_by.username", read_only=True)
+
+    class Meta:
+        model = InventoryDamage
+        fields = [
+            "id",
+            "date",
+            "product",
+            "product_sku",
+            "quantity",
+            "unit_cost_snapshot",
+            "reason",
+            "responsible",
+            "responsible_username",
+            "responsible_other",
+            "reported_by",
+            "reported_by_username",
+        ]
+        read_only_fields = ["unit_cost_snapshot", "reported_by"]
+
+    def create(self, validated_data):
+        validated_data["unit_cost_snapshot"] = validated_data["product"].unit_cost
+        validated_data["reported_by"] = self.context["request"].user
         return super().create(validated_data)

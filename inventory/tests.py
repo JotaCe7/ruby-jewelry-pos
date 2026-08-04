@@ -1,11 +1,12 @@
 from decimal import Decimal
 
+from django.contrib.auth.models import User
 from django.test import TestCase, TransactionTestCase
 
 from catalogs.models import ProductCategory, ProductSubcategory
 from pos.models import InventoryExit, MovementType, Sale
 
-from .models import BarcodeSequence, InventoryAudit, InventoryEntry, Product
+from .models import BarcodeSequence, InventoryAudit, InventoryDamage, InventoryEntry, Product
 from .services import _ean13_check_digit, apply_stock_entry_cost, generate_barcode, get_current_stock
 
 
@@ -50,6 +51,7 @@ class StockCalculationTests(TestCase):
 
     def test_stock_nets_entries_audits_and_exits_with_multiple_rows_each(self):
         product = make_product()
+        reporter = User.objects.create_user(username="reporter1", password="x", is_staff=True)
         InventoryEntry.objects.create(date="2026-01-01", product=product, quantity=20)
         InventoryEntry.objects.create(date="2026-01-02", product=product, quantity=10)
         make_exit(product, 3)
@@ -62,11 +64,19 @@ class StockCalculationTests(TestCase):
             loss_adjustment=5,
             loss_value=Decimal("20.00"),
         )
+        InventoryDamage.objects.create(
+            date="2026-01-04", product=product, quantity=1, unit_cost_snapshot=product.unit_cost,
+            reported_by=reporter,
+        )
+        InventoryDamage.objects.create(
+            date="2026-01-05", product=product, quantity=1, unit_cost_snapshot=product.unit_cost,
+            reported_by=reporter,
+        )
 
-        # entries(20+10) - audit_loss(5) - exits(3+2) = 20
-        self.assertEqual(get_current_stock(product), 20)
+        # entries(20+10) - audit_loss(5) - damages(1+1) - exits(3+2) = 18
+        self.assertEqual(get_current_stock(product), 18)
         annotated = Product.objects.with_stock().get(pk=product.pk)
-        self.assertEqual(annotated.current_stock, 20)
+        self.assertEqual(annotated.current_stock, 18)
 
     def test_stock_is_zero_with_no_movements(self):
         product = make_product()
@@ -136,6 +146,76 @@ class InventoryAuditApiTests(TestCase):
         # The shrinkage is netted directly in the stock formula — no
         # compensating InventoryExit row is created for it.
         self.assertEqual(get_current_stock(product), 18)
+
+
+class InventoryDamageApiTests(TestCase):
+    """A damage report is Admin-only, never tied to a Sale, and reduces
+    stock directly (see StockCalculationTests) — distinct from the old
+    Sale-line-based "Dañado" movement type, which required a fake S/0
+    sale just to record a loss."""
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        self.admin = User.objects.create_user(username="admin_dmg", password="x", is_staff=True)
+        self.seller = User.objects.create_user(username="seller_dmg", password="x", is_staff=False)
+        self.client = APIClient()
+
+    def test_creating_a_damage_report_snapshots_unit_cost_and_reporter(self):
+        product = make_product(cost="4.00")
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post(
+            "/api/inventory/damages/",
+            {
+                "date": "2026-01-05",
+                "product": product.id,
+                "quantity": 2,
+                "reason": "se rompió mostrando al cliente",
+                "responsible": self.seller.id,
+                "responsible_other": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(Decimal(response.data["unit_cost_snapshot"]), Decimal("4.00"))
+        self.assertEqual(response.data["reported_by_username"], "admin_dmg")
+        self.assertEqual(response.data["responsible_username"], "seller_dmg")
+        self.assertEqual(get_current_stock(product), -2)
+
+    def test_responsible_can_be_free_text_instead_of_a_system_user(self):
+        product = make_product(cost="4.00")
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post(
+            "/api/inventory/damages/",
+            {
+                "date": "2026-01-05",
+                "product": product.id,
+                "quantity": 1,
+                "reason": "",
+                "responsible": None,
+                "responsible_other": "Personal de limpieza",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertIsNone(response.data["responsible_username"])
+        self.assertEqual(response.data["responsible_other"], "Personal de limpieza")
+
+    def test_a_non_admin_seller_cannot_report_damage(self):
+        product = make_product()
+        self.client.force_authenticate(user=self.seller)
+
+        response = self.client.post(
+            "/api/inventory/damages/",
+            {"date": "2026-01-05", "product": product.id, "quantity": 1},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
 
 
 class BarcodeGenerationTests(TestCase):

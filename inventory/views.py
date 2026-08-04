@@ -8,9 +8,10 @@ from catalogs.models import ProductSubcategory
 from core.permissions import IsAdminOrReadOnly
 
 from .filters import ProductFilter
-from .models import InventoryAudit, InventoryEntry, PriceTier, Product
+from .models import InventoryAudit, InventoryDamage, InventoryEntry, PriceTier, Product
 from .serializers import (
     InventoryAuditSerializer,
+    InventoryDamageSerializer,
     InventoryEntrySerializer,
     PriceTierSerializer,
     ProductSerializer,
@@ -65,5 +66,12 @@ class InventoryEntryViewSet(viewsets.ModelViewSet):
 class InventoryAuditViewSet(viewsets.ModelViewSet):
     queryset = InventoryAudit.objects.select_related("product").all()
     serializer_class = InventoryAuditSerializer
+    filterset_fields = ["product"]
+    permission_classes = [IsAdminUser]
+
+
+class InventoryDamageViewSet(viewsets.ModelViewSet):
+    queryset = InventoryDamage.objects.select_related("product", "responsible", "reported_by").all()
+    serializer_class = InventoryDamageSerializer
     filterset_fields = ["product"]
     permission_classes = [IsAdminUser]

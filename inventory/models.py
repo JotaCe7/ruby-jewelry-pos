@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models, transaction
 from django.db.models import IntegerField, OuterRef, Subquery, Sum
@@ -12,13 +13,14 @@ from core.models import TimeStampedModel
 class ProductQuerySet(models.QuerySet):
     def with_stock(self):
         """Annotates current_stock from historical entries, minus audit
-        shrinkage and POS exits. Uses independent Subqueries (not multiple
-        Sum()s on sibling reverse relations in one annotate()) — combining
-        them directly would JOIN entries × audits × exits and inflate each
-        sum by the other tables' row counts. Keep in sync with
-        `inventory.services.get_current_stock`, which does the same
-        computation for single-instance use (e.g. right after saving a new
-        entry, before the queryset would reflect it in a fresh query).
+        shrinkage, damage reports, and POS exits. Uses independent
+        Subqueries (not multiple Sum()s on sibling reverse relations in one
+        annotate()) — combining them directly would JOIN entries × audits ×
+        damages × exits and inflate each sum by the other tables' row
+        counts. Keep in sync with `inventory.services.get_current_stock`,
+        which does the same computation for single-instance use (e.g. right
+        after saving a new entry, before the queryset would reflect it in a
+        fresh query).
         """
         # Imported lazily to avoid a circular import: pos.models.InventoryExit
         # has a FK to Product, so pos can't be imported at module load time.
@@ -38,6 +40,13 @@ class ProductQuerySet(models.QuerySet):
             .annotate(total=Sum("loss_adjustment"))
             .values("total")
         )
+        damages_total = (
+            InventoryDamage.objects.filter(product=OuterRef("pk"))
+            .order_by()
+            .values("product")
+            .annotate(total=Sum("quantity"))
+            .values("total")
+        )
         exits_total = (
             InventoryExit.objects.filter(product=OuterRef("pk"))
             .order_by()
@@ -48,6 +57,7 @@ class ProductQuerySet(models.QuerySet):
         return self.annotate(
             current_stock=Coalesce(Subquery(entries_total, output_field=IntegerField()), 0)
             - Coalesce(Subquery(audit_loss_total, output_field=IntegerField()), 0)
+            - Coalesce(Subquery(damages_total, output_field=IntegerField()), 0)
             - Coalesce(Subquery(exits_total, output_field=IntegerField()), 0)
         )
 
@@ -187,3 +197,36 @@ class InventoryAudit(TimeStampedModel):
 
     def __str__(self):
         return f"{self.date} — {self.product.sku} (ajuste {self.loss_adjustment})"
+
+
+class InventoryDamage(TimeStampedModel):
+    """A single known, direct loss (a piece broke or was scratched beyond
+    sale, etc.) — distinct from InventoryAudit's periodic count
+    reconciliation, and never tied to a Sale/ticket. Subtracts from stock
+    on its own, the same way audit shrinkage does."""
+
+    date = models.DateField()
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="damages")
+    quantity = models.PositiveIntegerField(default=1)
+    # Frozen at report time — a loss is valued at what the unit actually
+    # cost the business then, not at today's average cost.
+    unit_cost_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
+    reason = models.CharField(max_length=255, blank=True)
+    # Who is responsible for the piece (not necessarily whoever is typing
+    # this into the system) — a system user when there is one, otherwise
+    # free text (e.g. a cleaning contractor with no account here).
+    responsible = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name="+", null=True, blank=True
+    )
+    responsible_other = models.CharField(max_length=150, blank=True)
+    reported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="reported_damages"
+    )
+
+    class Meta:
+        ordering = ["-date", "-id"]
+        verbose_name = _("inventory damage report")
+        verbose_name_plural = _("inventory damage reports")
+
+    def __str__(self):
+        return f"{self.date} — {self.product.sku} (-{self.quantity})"

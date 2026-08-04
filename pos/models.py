@@ -13,7 +13,6 @@ from inventory.models import Product
 class MovementType(models.TextChoices):
     SALE = "SALE", _("Sale")
     GIFT = "GIFT", _("Gift / Complimentary")
-    DAMAGED = "DAMAGED", _("Damaged / Broken")
 
 
 class Sale(TimeStampedModel):
