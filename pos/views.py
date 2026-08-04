@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from django.utils.dateparse import parse_date
+from django.utils.translation import gettext_lazy as _
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -95,16 +96,17 @@ class DraftSaleFinalizeView(APIView):
         try:
             draft = DraftSale.objects.get(created_by=request.user)
         except DraftSale.DoesNotExist:
-            return Response({"detail": "No hay ningún ticket en borrador."}, status=400)
+            return Response({"detail": _("There is no draft ticket.")}, status=400)
 
         lines = list(draft.lines.select_related("product", "payment_method"))
         if not lines:
-            return Response({"detail": "El ticket no tiene productos."}, status=400)
+            return Response({"detail": _("The ticket has no products.")}, status=400)
 
         for line in lines:
             if line.movement_type == MovementType.SALE and not line.payment_method:
                 return Response(
-                    {"detail": f"Falta el método de pago para {line.product.sku}."}, status=400
+                    {"detail": _("Payment method is missing for %(sku)s.") % {"sku": line.product.sku}},
+                    status=400,
                 )
 
         lines_data = [
@@ -177,7 +179,7 @@ class RegisterSetProcessDateView(APIView):
         raw_date = request.data.get("date")
         new_date = parse_date(raw_date) if raw_date else None
         if not new_date:
-            return Response({"detail": "date es requerido, formato YYYY-MM-DD."}, status=400)
+            return Response({"detail": _("date is required, format YYYY-MM-DD.")}, status=400)
         flags = set_process_date(new_date)
         return Response({"process_date": new_date, **flags})
 
@@ -203,14 +205,14 @@ class RegisterClosingActionView(APIView):
         if seller_id and str(seller_id) != str(request.user.pk):
             if not request.user.is_staff:
                 return Response(
-                    {"detail": "Solo un administrador puede cerrar la caja de otro vendedor."}, status=403
+                    {"detail": _("Only an administrator can close another seller's register.")}, status=403
                 )
             seller = get_object_or_404(User, pk=seller_id)
 
         if mode not in ("PANTALLA", "IMPRESORA"):
-            return Response({"detail": "mode debe ser PANTALLA o IMPRESORA."}, status=400)
+            return Response({"detail": _("mode must be PANTALLA or IMPRESORA.")}, status=400)
         if closing_type not in ("X", "Z"):
-            return Response({"detail": "closing_type debe ser X o Z."}, status=400)
+            return Response({"detail": _("closing_type must be X or Z.")}, status=400)
 
         try:
             if mode == "PANTALLA":
@@ -246,7 +248,7 @@ class RegisterPinView(APIView):
     def post(self, request):
         pin = request.data.get("pin", "")
         if not pin or not pin.isdigit():
-            return Response({"detail": "El PIN debe ser numérico."}, status=400)
+            return Response({"detail": _("The PIN must be numeric.")}, status=400)
         AdminPin.get_or_create_for(request.user).set_pin(pin)
         return Response({"has_pin": True})
 

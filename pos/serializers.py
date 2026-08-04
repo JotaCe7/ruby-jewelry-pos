@@ -156,11 +156,11 @@ class SaleSerializer(serializers.ModelSerializer):
         if seller_override is not None:
             if not requester.is_staff:
                 raise serializers.ValidationError(
-                    _("Solo un administrador puede registrar una venta a nombre de otro vendedor.")
+                    _("Only an administrator can register a sale on behalf of another seller.")
                 )
             if not seller_override.check_password(seller_password):
                 raise serializers.ValidationError(
-                    {"seller_password": _("Contraseña incorrecta para el vendedor seleccionado.")}
+                    {"seller_password": _("Incorrect password for the selected seller.")}
                 )
             seller = seller_override
 

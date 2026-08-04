@@ -80,7 +80,7 @@ class UserSerializer(serializers.ModelSerializer):
             # happens to touch.
             value = profile_data[field] if field in profile_data else getattr(existing_profile, field, None)
             if value in (None, ""):
-                errors[field] = _("Obligatorio en producción.")
+                errors[field] = _("Required in production.")
         if errors:
             raise serializers.ValidationError(errors)
         return attrs
@@ -103,7 +103,7 @@ class UserSerializer(serializers.ModelSerializer):
         profile_data = validated_data.pop("profile", {})
         password = validated_data.pop("password", None)
         if not password:
-            raise serializers.ValidationError({"password": _("Requerido al crear un usuario.")})
+            raise serializers.ValidationError({"password": _("Required when creating a user.")})
         user = User(**validated_data)
         user.set_password(password)
         user.save()  # the post_save signal creates user.profile right here

@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
 from .models import InventoryAudit, InventoryEntry, PriceTier, Product
@@ -78,7 +79,7 @@ class ProductSerializer(serializers.ModelSerializer):
         if self.instance:
             queryset = queryset.exclude(pk=self.instance.pk)
         if queryset.exists():
-            raise serializers.ValidationError("A product with this barcode already exists.")
+            raise serializers.ValidationError(_("A product with this barcode already exists."))
         return value
 
     def create(self, validated_data):

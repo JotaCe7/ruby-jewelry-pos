@@ -1,0 +1,260 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"Language: es\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "A product with this barcode already exists."
+msgstr "Ya existe un producto con este código de barras."
+
+msgid ""
+"Another register is still open on the previous process date. Wait for it to "
+"close."
+msgstr ""
+"Todavía hay otra caja abierta en la fecha de proceso anterior. Espera a que "
+"se cierre."
+
+msgid "At least one line is required."
+msgstr "Se requiere al menos una línea."
+
+msgid "Cash on delivery"
+msgstr "Contraentrega"
+
+msgid "Cash on order"
+msgstr "Al contado"
+
+msgid "Could not fetch the exchange rate for %(date)s."
+msgstr "No se pudo obtener el tipo de cambio para %(date)s."
+
+msgid "Credit Note"
+msgstr "Nota de Crédito"
+
+msgid "DNI"
+msgstr "DNI"
+
+msgid "Damaged / Broken"
+msgstr "Dañado / Roto"
+
+msgid "Debit Note"
+msgstr "Nota de Débito"
+
+msgid "Enter a rate manually."
+msgstr "Ingresa un tipo de cambio manualmente."
+
+msgid "Female"
+msgstr "Femenino"
+
+msgid "Foreign Resident Card"
+msgstr "Carné de Extranjería"
+
+msgid "Gift / Complimentary"
+msgstr "Regalo / Cortesía"
+
+msgid "In installments"
+msgstr "En partes"
+
+msgid "Incorrect PIN."
+msgstr "PIN incorrecto."
+
+msgid "Incorrect password for the selected seller."
+msgstr "Contraseña incorrecta para el vendedor seleccionado."
+
+msgid "Invalid date."
+msgstr "Fecha inválida."
+
+msgid "Invoice"
+msgstr "Factura"
+
+msgid "Issued"
+msgstr "Emitido"
+
+msgid "Male"
+msgstr "Masculino"
+
+msgid "No document"
+msgstr "Sin documento"
+
+msgid "No supplier"
+msgstr "Sin proveedor"
+
+msgid "None"
+msgstr "Ninguno"
+
+msgid "Only Notas de Venta can be voided for now."
+msgstr "Solo se pueden anular Notas de Venta por ahora."
+
+msgid "Only an administrator can close another seller's register."
+msgstr "Solo un administrador puede cerrar la caja de otro vendedor."
+
+msgid "Only an administrator can register a sale on behalf of another seller."
+msgstr ""
+"Solo un administrador puede registrar una venta a nombre de otro vendedor."
+
+msgid "Other"
+msgstr "Otro"
+
+msgid "Passport"
+msgstr "Pasaporte"
+
+msgid "Payment method is missing for %(sku)s."
+msgstr "Falta el método de pago para %(sku)s."
+
+msgid "Prepaid"
+msgstr "Pagado por adelantado"
+
+msgid "RUC"
+msgstr "RUC"
+
+msgid "Receipt"
+msgstr "Boleta de Venta"
+
+msgid "Required in production."
+msgstr "Obligatorio en producción."
+
+msgid "Required when creating a user."
+msgstr "Requerido al crear un usuario."
+
+msgid "Sale"
+msgstr "Venta"
+
+msgid "Sales Receipt"
+msgstr "Nota de Venta"
+
+msgid "Simplified receipt"
+msgstr "Boleta"
+
+msgid "Soles (PEN)"
+msgstr "Soles (PEN)"
+
+msgid "The PIN must be numeric."
+msgstr "El PIN debe ser numérico."
+
+msgid "The process date is ahead of today. Contact the administrator."
+msgstr ""
+"La fecha de proceso está adelantada respecto a hoy. Contacta al "
+"administrador."
+
+msgid "The ticket has no products."
+msgstr "El ticket no tiene productos."
+
+msgid "There is no draft ticket."
+msgstr "No hay ningún ticket en borrador."
+
+msgid "This document has already been voided."
+msgstr "Este documento ya fue anulado."
+
+msgid "This seller's register isn't open. Open it before selling."
+msgstr ""
+"La caja de este vendedor no está abierta. Debe abrirla antes de vender."
+
+msgid "US Dollars (USD)"
+msgstr "Dólares (USD)"
+
+msgid "Voided"
+msgstr "Anulado"
+
+msgid "Voucher"
+msgstr "Recibo"
+
+msgid "X Closing (partial)"
+msgstr "Cierre X (parcial)"
+
+msgid "Your register is already open."
+msgstr "Tu caja ya está abierta."
+
+msgid "Z Closing (end of day)"
+msgstr "Cierre Z (final del día)"
+
+msgid "category is required."
+msgstr "category es requerido."
+
+msgid "category not found."
+msgstr "category no encontrada."
+
+msgid "closing_type must be X or Z."
+msgstr "closing_type debe ser X o Z."
+
+msgid "color variant"
+msgstr "variante de color"
+
+msgid "color variants"
+msgstr "variantes de color"
+
+msgid "customer"
+msgstr "cliente"
+
+msgid "customers"
+msgstr "clientes"
+
+msgid "daily exchange rate"
+msgstr "tipo de cambio diario"
+
+msgid "daily exchange rates"
+msgstr "tipos de cambio diarios"
+
+msgid "date is required, format YYYY-MM-DD."
+msgstr "date es requerido, formato YYYY-MM-DD."
+
+msgid "expense categories"
+msgstr "categorías de gasto"
+
+msgid "expense category"
+msgstr "categoría de gasto"
+
+msgid "inventory entries"
+msgstr "entradas de inventario"
+
+msgid "mode must be PANTALLA or IMPRESORA."
+msgstr "mode debe ser PANTALLA o IMPRESORA."
+
+msgid "payment method"
+msgstr "método de pago"
+
+msgid "payment methods"
+msgstr "métodos de pago"
+
+msgid "payment_method is required for sale lines."
+msgstr "payment_method es requerido para líneas de venta."
+
+msgid "presentation"
+msgstr "presentación"
+
+msgid "presentations"
+msgstr "presentaciones"
+
+msgid "product categories"
+msgstr "categorías de producto"
+
+msgid "product category"
+msgstr "categoría de producto"
+
+msgid "product subcategories"
+msgstr "subcategorías de producto"
+
+msgid "product subcategory"
+msgstr "subcategoría de producto"
+
+msgid "subcategory is required."
+msgstr "subcategory es requerido."
+
+msgid "subcategory not found."
+msgstr "subcategory no encontrada."
+
+msgid "supplier"
+msgstr "proveedor"
+
+msgid "suppliers"
+msgstr "proveedores"
+
+msgid "tax ID"
+msgstr "RUC"
+
+msgid "user profile"
+msgstr "perfil de usuario"
+
+msgid "user profiles"
+msgstr "perfiles de usuario"

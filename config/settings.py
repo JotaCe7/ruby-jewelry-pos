@@ -101,6 +101,7 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "es"
 LANGUAGES = [
     ("es", "Español"),
+    ("en", "English"),
 ]
 LOCALE_PATHS = [BASE_DIR / "locale"]
 TIME_ZONE = "America/Lima"

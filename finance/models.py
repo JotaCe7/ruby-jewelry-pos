@@ -7,22 +7,22 @@ from core.models import TimeStampedModel
 
 
 class ReceiptType(models.TextChoices):
-    BOLETA = "BOLETA", _("Boleta")
-    FACTURA = "FACTURA", _("Factura")
-    RECIBO = "RECIBO", _("Recibo")
-    NONE = "NONE", _("Ninguno")
+    BOLETA = "BOLETA", _("Simplified receipt")
+    FACTURA = "FACTURA", _("Invoice")
+    RECIBO = "RECIBO", _("Voucher")
+    NONE = "NONE", _("None")
 
 
 class PaymentStatus(models.TextChoices):
-    PREPAID = "PREPAID", _("Pagado por adelantado")
-    CASH_ON_ORDER = "CASH_ON_ORDER", _("Al contado")
-    INSTALLMENTS = "INSTALLMENTS", _("En partes")
-    CASH_ON_DELIVERY = "CASH_ON_DELIVERY", _("Contraentrega")
+    PREPAID = "PREPAID", _("Prepaid")
+    CASH_ON_ORDER = "CASH_ON_ORDER", _("Cash on order")
+    INSTALLMENTS = "INSTALLMENTS", _("In installments")
+    CASH_ON_DELIVERY = "CASH_ON_DELIVERY", _("Cash on delivery")
 
 
 class Currency(models.TextChoices):
     PEN = "PEN", _("Soles (PEN)")
-    USD = "USD", _("Dólares (USD)")
+    USD = "USD", _("US Dollars (USD)")
 
 
 class Expense(TimeStampedModel):
