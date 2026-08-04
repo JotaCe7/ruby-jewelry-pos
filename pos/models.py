@@ -11,9 +11,9 @@ from inventory.models import Product
 
 
 class MovementType(models.TextChoices):
-    SALE = "SALE", _("Venta")
-    GIFT = "GIFT", _("Regalo / Cortesía")
-    DAMAGED = "DAMAGED", _("Dañado / Roto")
+    SALE = "SALE", _("Sale")
+    GIFT = "GIFT", _("Gift / Complimentary")
+    DAMAGED = "DAMAGED", _("Damaged / Broken")
 
 
 class Sale(TimeStampedModel):
@@ -188,8 +188,8 @@ class AdminPin(models.Model):
 
 
 class ClosingType(models.TextChoices):
-    X = "X", _("Cierre X (parcial)")
-    Z = "Z", _("Cierre Z (final del día)")
+    X = "X", _("X Closing (partial)")
+    Z = "Z", _("Z Closing (end of day)")
 
 
 class RegisterClosing(TimeStampedModel):
@@ -254,16 +254,16 @@ class DocumentType(models.TextChoices):
     and Nota de Crédito/Débito to adjust an already-issued document — is a
     services/views change, not a schema migration."""
 
-    NOTA_VENTA = "NOTA_VENTA", _("Nota de Venta")
-    BOLETA = "BOLETA", _("Boleta de Venta")
-    FACTURA = "FACTURA", _("Factura")
-    NOTA_CREDITO = "NOTA_CREDITO", _("Nota de Crédito")
-    NOTA_DEBITO = "NOTA_DEBITO", _("Nota de Débito")
+    NOTA_VENTA = "NOTA_VENTA", _("Sales Receipt")
+    BOLETA = "BOLETA", _("Receipt")
+    FACTURA = "FACTURA", _("Invoice")
+    NOTA_CREDITO = "NOTA_CREDITO", _("Credit Note")
+    NOTA_DEBITO = "NOTA_DEBITO", _("Debit Note")
 
 
 class DocumentStatus(models.TextChoices):
-    ISSUED = "ISSUED", _("Emitido")
-    VOIDED = "VOIDED", _("Anulado")
+    ISSUED = "ISSUED", _("Issued")
+    VOIDED = "VOIDED", _("Voided")
 
 
 DEFAULT_DOCUMENT_SERIES = {

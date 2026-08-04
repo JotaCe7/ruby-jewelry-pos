@@ -32,9 +32,9 @@ class CustomerDocumentType(models.TextChoices):
 
     DNI = "DNI", _("DNI")
     RUC = "RUC", _("RUC")
-    CE = "CE", _("Carné de Extranjería")
-    PASAPORTE = "PASAPORTE", _("Pasaporte")
-    SIN_DOCUMENTO = "SIN_DOCUMENTO", _("Sin documento")
+    CE = "CE", _("Foreign Resident Card")
+    PASAPORTE = "PASAPORTE", _("Passport")
+    SIN_DOCUMENTO = "SIN_DOCUMENTO", _("No document")
 
 
 class Customer(Contact):

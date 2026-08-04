@@ -1,5 +1,6 @@
 import datetime
 
+from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
@@ -33,7 +34,7 @@ class ExchangeRateView(APIView):
         try:
             date = datetime.date.fromisoformat(date_param) if date_param else datetime.date.today()
         except ValueError:
-            return Response({"detail": "Invalid date."}, status=400)
+            return Response({"detail": _("Invalid date.")}, status=400)
 
         try:
             value = ExchangeRateService.get_for(date, currency)

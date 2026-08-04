@@ -1,3 +1,4 @@
+from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
@@ -37,11 +38,11 @@ class ProductViewSet(viewsets.ModelViewSet):
     def preview_code(self, request):
         subcategory_id = request.query_params.get("subcategory")
         if not subcategory_id:
-            return Response({"detail": "subcategory is required."}, status=400)
+            return Response({"detail": _("subcategory is required.")}, status=400)
         try:
             subcategory = ProductSubcategory.objects.get(pk=subcategory_id)
         except ProductSubcategory.DoesNotExist:
-            return Response({"detail": "subcategory not found."}, status=404)
+            return Response({"detail": _("subcategory not found.")}, status=404)
         return Response({"code": preview_next_product_code(subcategory)})
 
 

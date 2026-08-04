@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 
 class RegisterError(Exception):
@@ -73,7 +74,7 @@ def ensure_register_open(seller):
 
     session = CashRegisterSession.objects.filter(seller=seller, is_open=True).first()
     if not session:
-        raise RegisterClosedError("La caja de este vendedor no está abierta. Debe abrirla antes de vender.")
+        raise RegisterClosedError(_("This seller's register isn't open. Open it before selling."))
     return session
 
 
@@ -86,7 +87,7 @@ def open_register(user):
 
     session, _created = CashRegisterSession.objects.get_or_create(seller=user)
     if session.is_open:
-        raise RegisterAlreadyOpenError("Tu caja ya está abierta.")
+        raise RegisterAlreadyOpenError(_("Your register is already open."))
 
     process_date_obj = ProcessDate.get_or_create_default()
     today = timezone.localdate()
@@ -94,13 +95,13 @@ def open_register(user):
     if process_date_obj.current_date < today:
         if CashRegisterSession.objects.filter(is_open=True).exists():
             raise ProcessDateBlockedError(
-                "Todavía hay otra caja abierta en la fecha de proceso anterior. Espera a que se cierre."
+                _("Another register is still open on the previous process date. Wait for it to close.")
             )
         process_date_obj.current_date = today
         process_date_obj.save(update_fields=["current_date"])
     elif process_date_obj.current_date > today:
         raise ProcessDateBlockedError(
-            "La fecha de proceso está adelantada respecto a hoy. Contacta al administrador."
+            _("The process date is ahead of today. Contact the administrator.")
         )
 
     session.is_open = True
@@ -298,7 +299,7 @@ def preview_closing(seller, closing_type, pin, include_product_breakdown=False):
 
     admin = AdminPin.find_by_pin(pin)
     if not admin:
-        raise InvalidPinError("PIN incorrecto.")
+        raise InvalidPinError(_("Incorrect PIN."))
     totals = compute_closing_totals(seller, closing_type, include_product_breakdown=include_product_breakdown)
     if closing_type == ClosingType.Z:
         totals["authorized_by_username"] = admin.username
@@ -313,7 +314,7 @@ def execute_closing(seller, closing_type, pin, performed_by, include_product_bre
 
     admin = AdminPin.find_by_pin(pin)
     if not admin:
-        raise InvalidPinError("PIN incorrecto.")
+        raise InvalidPinError(_("Incorrect PIN."))
 
     totals = compute_closing_totals(seller, closing_type, include_product_breakdown=include_product_breakdown)
 
@@ -428,11 +429,11 @@ def void_document(document, reason, pin, performed_by):
     from .models import AdminPin, DocumentStatus, DocumentType
 
     if document.document_type != DocumentType.NOTA_VENTA:
-        raise DocumentNotVoidableError("Solo se pueden anular Notas de Venta por ahora.")
+        raise DocumentNotVoidableError(_("Only Notas de Venta can be voided for now."))
     if document.status == DocumentStatus.VOIDED:
-        raise DocumentNotVoidableError("Este documento ya fue anulado.")
+        raise DocumentNotVoidableError(_("This document has already been voided."))
     if not AdminPin.find_by_pin(pin):
-        raise InvalidPinError("PIN incorrecto.")
+        raise InvalidPinError(_("Incorrect PIN."))
 
     with transaction.atomic():
         sale = document.sale

@@ -26,14 +26,14 @@ class NamedCatalogModel(TimeStampedModel):
 
 
 class Gender(models.TextChoices):
-    MALE = "M", _("Masculino")
-    FEMALE = "F", _("Femenino")
-    OTHER = "O", _("Otro")
+    MALE = "M", _("Male")
+    FEMALE = "F", _("Female")
+    OTHER = "O", _("Other")
 
 
 class DocumentType(models.TextChoices):
-    DNI = "DNI", "DNI"
-    CE = "CE", _("Carné de Extranjería")
+    DNI = "DNI", _("DNI")
+    CE = "CE", _("Foreign Resident Card")
 
 
 class UserProfile(TimeStampedModel):

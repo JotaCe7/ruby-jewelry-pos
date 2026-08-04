@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.db.models import F, Sum
 from django.db.models.functions import Coalesce
+from django.utils.translation import gettext_lazy as _
 
 from inventory.models import InventoryAudit, Product
 from pos.models import CashRegisterSession, ClosingType, InventoryExit, MovementType
@@ -84,7 +85,7 @@ def get_summary(date_from, date_to):
             supplier = exit_row.product.supplier
             supplier_key = supplier.id if supplier else None
             supplier_bucket = by_supplier[supplier_key]
-            supplier_bucket["name"] = supplier.name if supplier else "Sin proveedor"
+            supplier_bucket["name"] = supplier.name if supplier else str(_("No supplier"))
             supplier_bucket["revenue"] += exit_row.final_price
             supplier_bucket["cost"] += exit_row.unit_cost_snapshot * exit_row.quantity
 
