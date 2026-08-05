@@ -15,7 +15,7 @@ class ProductQuerySet(models.QuerySet):
         """Annotates current_stock from historical entries, minus audit
         shrinkage, damage reports, and POS exits. Uses independent
         Subqueries (not multiple Sum()s on sibling reverse relations in one
-        annotate()) — combining them directly would JOIN entries × audits ×
+        annotate()): combining them directly would JOIN entries × audits ×
         damages × exits and inflate each sum by the other tables' row
         counts. Keep in sync with `inventory.services.get_current_stock`,
         which does the same computation for single-instance use (e.g. right
@@ -64,9 +64,9 @@ class ProductQuerySet(models.QuerySet):
 
 class BarcodeSequence(models.Model):
     """Singleton row (always pk=1) tracking the next sequential number for
-    auto-generated Product barcodes — see inventory.services.generate_barcode
-    for the full EAN-13 construction. Locked via select_for_update before
-    allocating, mirroring pos.models.DocumentSeries' correlativo pattern."""
+    auto-generated Product barcodes (see inventory.services.generate_barcode
+    for the full EAN-13 construction). Locked via select_for_update before
+    allocating, mirroring pos.models.DocumentSeries' sequence-number pattern."""
 
     next_value = models.PositiveIntegerField(default=1)
 
@@ -82,7 +82,7 @@ class BarcodeSequence(models.Model):
 class Product(TimeStampedModel):
     # Auto-generated as the parent subcategory's code + a 3-digit
     # sequential number scoped to that subcategory (e.g. "0101001",
-    # "0101002" under subcategory "0101") — never editable afterward.
+    # "0101002" under subcategory "0101"). Never editable afterward.
     # Replaces the old abbreviation-based generator (e.g. "ARE-FAN"):
     # the field name stays `sku` since it's referenced throughout
     # pos/dashboard/inventory, but what it holds and how it behaves both
@@ -90,7 +90,7 @@ class Product(TimeStampedModel):
     # this read-only automatically.
     sku = models.CharField(max_length=50, unique=True, editable=False, blank=True)
     # Auto-generated (see inventory.services.generate_barcode) but editable,
-    # e.g. if a supplier's own barcode should be used instead — validated
+    # e.g. if a supplier's own barcode should be used instead. Validated
     # for uniqueness the same way sku is (ProductSerializer.validate_barcode).
     barcode = models.CharField(max_length=13, unique=True)
     base_model = models.CharField(max_length=150)
@@ -107,8 +107,8 @@ class Product(TimeStampedModel):
     supplier = models.ForeignKey(
         Supplier, on_delete=models.PROTECT, related_name="products", null=True, blank=True
     )
-    # Running weighted-average cost, updated by InventoryEntry.unit_cost —
-    # never edited directly (see inventory.services.apply_stock_entry_cost).
+    # Running weighted-average cost, updated by InventoryEntry.unit_cost.
+    # Never edited directly (see inventory.services.apply_stock_entry_cost).
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     suggested_price = models.DecimalField(max_digits=10, decimal_places=2)
     min_stock = models.PositiveIntegerField(default=0)
@@ -120,7 +120,7 @@ class Product(TimeStampedModel):
         ordering = ["base_model"]
 
     def __str__(self):
-        return f"{self.sku} — {self.base_model}"
+        return f"{self.sku} ({self.base_model})"
 
     def save(self, *args, **kwargs):
         if not self.pk and not self.sku:
@@ -144,7 +144,7 @@ class Product(TimeStampedModel):
 
 class PriceTier(TimeStampedModel):
     """A quantity breakpoint below which the flat `suggested_price` applies
-    (min_quantity starts at 2 — the qty=1 case is just suggested_price)."""
+    (min_quantity starts at 2, since the qty=1 case is just suggested_price)."""
 
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="price_tiers")
     min_quantity = models.PositiveIntegerField(validators=[MinValueValidator(2)])
@@ -159,7 +159,7 @@ class PriceTier(TimeStampedModel):
         ]
 
     def __str__(self):
-        return f"{self.product.sku} — {self.min_quantity}+: {self.unit_price}"
+        return f"{self.product.sku} ({self.min_quantity}+: {self.unit_price})"
 
 
 class InventoryEntry(TimeStampedModel):
@@ -179,7 +179,7 @@ class InventoryEntry(TimeStampedModel):
         verbose_name_plural = _("inventory entries")
 
     def __str__(self):
-        return f"{self.date} — {self.product.sku} (+{self.quantity})"
+        return f"{self.date}: {self.product.sku} (+{self.quantity})"
 
 
 class InventoryAudit(TimeStampedModel):
@@ -187,7 +187,7 @@ class InventoryAudit(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="audits")
     physical_count = models.IntegerField()
     # Snapshot of what the system expected before this audit's correction,
-    # and the resulting deltas — frozen at creation, never recalculated.
+    # and the resulting deltas. Frozen at creation, never recalculated.
     theoretical_stock_snapshot = models.IntegerField()
     loss_adjustment = models.IntegerField()
     loss_value = models.DecimalField(max_digits=12, decimal_places=2)
@@ -196,24 +196,24 @@ class InventoryAudit(TimeStampedModel):
         ordering = ["-date", "-id"]
 
     def __str__(self):
-        return f"{self.date} — {self.product.sku} (ajuste {self.loss_adjustment})"
+        return f"{self.date}: {self.product.sku} (ajuste {self.loss_adjustment})"
 
 
 class InventoryDamage(TimeStampedModel):
     """A single known, direct loss (a piece broke or was scratched beyond
-    sale, etc.) — distinct from InventoryAudit's periodic count
+    sale, etc.). Distinct from InventoryAudit's periodic count
     reconciliation, and never tied to a Sale/ticket. Subtracts from stock
     on its own, the same way audit shrinkage does."""
 
     date = models.DateField()
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="damages")
     quantity = models.PositiveIntegerField(default=1)
-    # Frozen at report time — a loss is valued at what the unit actually
+    # Frozen at report time. A loss is valued at what the unit actually
     # cost the business then, not at today's average cost.
     unit_cost_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
     reason = models.CharField(max_length=255, blank=True)
     # Who is responsible for the piece (not necessarily whoever is typing
-    # this into the system) — a system user when there is one, otherwise
+    # this into the system): a system user when there is one, otherwise
     # free text (e.g. a cleaning contractor with no account here).
     responsible = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name="+", null=True, blank=True
@@ -229,4 +229,4 @@ class InventoryDamage(TimeStampedModel):
         verbose_name_plural = _("inventory damage reports")
 
     def __str__(self):
-        return f"{self.date} — {self.product.sku} (-{self.quantity})"
+        return f"{self.date}: {self.product.sku} (-{self.quantity})"

@@ -36,9 +36,6 @@ msgstr "Nota de Crédito"
 msgid "DNI"
 msgstr "DNI"
 
-msgid "Damaged / Broken"
-msgstr "Dañado / Roto"
-
 msgid "Debit Note"
 msgstr "Nota de Débito"
 
@@ -83,9 +80,6 @@ msgstr "Sin proveedor"
 
 msgid "None"
 msgstr "Ninguno"
-
-msgid "Only Notas de Venta can be voided for now."
-msgstr "Solo se pueden anular Notas de Venta por ahora."
 
 msgid "Only an administrator can close another seller's register."
 msgstr "Solo un administrador puede cerrar la caja de otro vendedor."
@@ -258,3 +252,182 @@ msgstr "perfil de usuario"
 
 msgid "user profiles"
 msgstr "perfiles de usuario"
+
+msgid "Only Sales Receipts can be voided for now."
+msgstr "Solo se pueden anular Notas de Venta por ahora."
+
+msgid "open"
+msgstr "abierta"
+
+msgid "closed"
+msgstr "cerrada"
+
+msgid "inventory damage report"
+msgstr "reporte de daño de inventario"
+
+msgid "inventory damage reports"
+msgstr "reportes de daño de inventario"
+
+msgid "Initial Inventory Load Template"
+msgstr "Plantilla de Carga Inicial de Inventario"
+
+msgid "Instructions"
+msgstr "Instrucciones"
+
+msgid "How to use this template:"
+msgstr "Cómo usar esta plantilla:"
+
+msgid ""
+"1. Fill in the 'Products' sheet, with one row per product (SKU) you want to "
+"add."
+msgstr ""
+"1. Llena la hoja 'Productos', con una fila por cada producto (SKU) que "
+"quieras dar de alta."
+
+msgid ""
+"   - 'Internal Code' is only for this template: use it to connect each "
+"product with"
+msgstr ""
+"   - 'Código Interno' es solo para esta plantilla: úsalo para conectar cada "
+"producto con"
+
+msgid ""
+"     its batches in the 'Initial Entries' sheet. It isn't the system's final"
+" SKU."
+msgstr ""
+"     sus lotes de entrada en la hoja 'Entradas Iniciales'. No es el SKU "
+"final del sistema."
+
+msgid ""
+"   - Category/Subcategory, Color, Presentation, and Supplier have a dropdown"
+msgstr ""
+"   - Categoría/Subcategoría, Color, Presentación y Proveedor tienen una "
+"lista"
+
+msgid "     list. Click the cell and choose an option to avoid mistakes."
+msgstr ""
+"     desplegable. Haz clic en la celda y elige una opción para evitar "
+"errores."
+
+msgid ""
+"   - If your catalog doesn't have the option you need, add it in the system "
+"first"
+msgstr ""
+"   - Si tu catálogo no tiene la opción que necesitas, agrégala primero en el"
+" sistema"
+
+msgid ""
+"     and ask for an updated template (or re-run the command that generates "
+"it)."
+msgstr ""
+"     y pide una plantilla actualizada (o vuelve a correr el comando que la "
+"genera)."
+
+msgid ""
+"2. Fill in the 'Initial Entries' sheet, with one row per batch with its own "
+"cost."
+msgstr ""
+"2. Llena la hoja 'Entradas Iniciales', con una fila por cada lote con su "
+"propio costo."
+
+msgid ""
+"   - The same product can have several rows if you bought it at different "
+"prices"
+msgstr ""
+"   - Un mismo producto puede tener varias filas si lo compraste a distintos "
+"precios"
+
+msgid ""
+"     (e.g. 20 units at S/2.00 + 40 units at S/1.50). The system calculates "
+"the"
+msgstr ""
+"     (ej. 20 unidades a S/2.00 + 40 unidades a S/1.50). El sistema calcula "
+"el costo"
+
+msgid ""
+"     weighted average cost automatically, so you don't have to calculate it "
+"yourself."
+msgstr ""
+"     promedio ponderado automáticamente, así que no tienes que calcularlo "
+"tú."
+
+msgid ""
+"   - Each product's initial stock is simply the sum of its entries here."
+msgstr ""
+"   - El stock inicial de cada producto es simplemente la suma de sus "
+"entradas aquí."
+
+msgid "     There's no separate 'initial stock' field."
+msgstr "     No existe un campo separado de 'stock inicial'."
+
+msgid ""
+"3. The 'Catalogs (reference)' sheet only feeds the dropdown lists. Don't "
+"edit it."
+msgstr ""
+"3. La hoja 'Catálogos (referencia)' solo alimenta las listas desplegables. "
+"No la edites."
+
+msgid ""
+"4. Once the bulk-upload module is ready, this file will be uploadable "
+"directly."
+msgstr ""
+"4. Cuando el módulo de carga masiva esté listo, este archivo se podrá subir "
+"directamente."
+
+msgid ""
+"   For now, keep filling it in at your own pace. None of your work is lost."
+msgstr ""
+"   Por ahora, sigue llenándolo con calma. No se pierde nada de tu trabajo."
+
+msgid "Catalogs (reference)"
+msgstr "Catálogos (referencia)"
+
+msgid "Category / Subcategory"
+msgstr "Categoría / Subcategoría"
+
+msgid "Color"
+msgstr "Color"
+
+msgid "Presentation"
+msgstr "Presentación"
+
+msgid "Supplier"
+msgstr "Proveedor"
+
+msgid "Products"
+msgstr "Productos"
+
+msgid "Internal Code *"
+msgstr "Código Interno *"
+
+msgid "Base Model *"
+msgstr "Modelo Base *"
+
+msgid "Category / Subcategory *"
+msgstr "Categoría / Subcategoría *"
+
+msgid "Suggested Price (S/) *"
+msgstr "Precio Sugerido (S/) *"
+
+msgid "Minimum Stock"
+msgstr "Stock Mínimo"
+
+msgid "Initial Entries"
+msgstr "Entradas Iniciales"
+
+msgid "Quantity *"
+msgstr "Cantidad *"
+
+msgid "Unit Cost (S/) *"
+msgstr "Costo Unitario (S/) *"
+
+msgid "Notes"
+msgstr "Notas"
+
+msgid "Return from voiding %(series)s-%(sequence_number)06d."
+msgstr "Devolución por anulación de %(series)s-%(sequence_number)06d."
+
+msgid "Payment reference is required for non-cash payment methods."
+msgstr ""
+"La referencia de pago es obligatoria para métodos de pago distintos de "
+"efectivo."

@@ -1,13 +1,14 @@
 """Generates the initial-load spreadsheet handed to the shop while the real
 bulk-import feature is being built. Pulls its dropdown lists live from the
 current catalogs, so re-running this after adding categories/colors/etc.
-keeps the template in sync. Not part of the app's runtime — this is an
+keeps the template in sync. Not part of the app's runtime: this is an
 operator utility, run manually: `manage.py generate_import_template`.
 """
 
 from pathlib import Path
 
 from django.core.management.base import BaseCommand
+from django.utils.translation import gettext_lazy as _
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.workbook.defined_name import DefinedName
@@ -72,36 +73,36 @@ class Command(BaseCommand):
     def _build_workbook(self, category_subcategory_pairs, colors, presentations, suppliers):
         wb = Workbook()
 
-        # ---------------------------------------------------- Instrucciones
+        # ---------------------------------------------------- Instructions
         ws = wb.active
-        ws.title = "Instrucciones"
-        ws["A1"] = "Joyería Ruby — Plantilla de Carga Inicial de Inventario"
+        ws.title = str(_("Instructions"))
+        ws["A1"] = f"Joyería Ruby: {_('Initial Inventory Load Template')}"
         ws["A1"].font = TITLE_FONT
         ws.merge_cells("A1:F1")
 
         instructions = [
             "",
-            "Cómo usar esta plantilla:",
+            str(_("How to use this template:")),
             "",
-            "1. Llena la hoja 'Productos' — una fila por cada producto (SKU) que quieras dar de alta.",
-            "   - 'Código Interno' es solo para esta plantilla: úsalo para conectar cada producto con",
-            "     sus lotes de entrada en la hoja 'Entradas Iniciales'. No es el SKU final del sistema.",
-            "   - Categoría/Subcategoría, Color, Presentación y Proveedor tienen una lista",
-            "     desplegable — haz clic en la celda y elige una opción para evitar errores.",
-            "   - Si tu catálogo no tiene la opción que necesitas, agrégala primero en el sistema",
-            "     y pide una plantilla actualizada (o vuelve a correr el comando que la genera).",
+            str(_("1. Fill in the 'Products' sheet, with one row per product (SKU) you want to add.")),
+            str(_("   - 'Internal Code' is only for this template: use it to connect each product with")),
+            str(_("     its batches in the 'Initial Entries' sheet. It isn't the system's final SKU.")),
+            str(_("   - Category/Subcategory, Color, Presentation, and Supplier have a dropdown")),
+            str(_("     list. Click the cell and choose an option to avoid mistakes.")),
+            str(_("   - If your catalog doesn't have the option you need, add it in the system first")),
+            str(_("     and ask for an updated template (or re-run the command that generates it).")),
             "",
-            "2. Llena la hoja 'Entradas Iniciales' — una fila por cada lote con su propio costo.",
-            "   - Un mismo producto puede tener varias filas si lo compraste a distintos precios",
-            "     (ej. 20 unidades a S/2.00 + 40 unidades a S/1.50) — el sistema calcula el costo",
-            "     promedio ponderado automáticamente, no tienes que calcularlo tú.",
-            "   - El stock inicial de cada producto es simplemente la suma de sus entradas aquí —",
-            "     no existe un campo separado de 'stock inicial'.",
+            str(_("2. Fill in the 'Initial Entries' sheet, with one row per batch with its own cost.")),
+            str(_("   - The same product can have several rows if you bought it at different prices")),
+            str(_("     (e.g. 20 units at S/2.00 + 40 units at S/1.50). The system calculates the")),
+            str(_("     weighted average cost automatically, so you don't have to calculate it yourself.")),
+            str(_("   - Each product's initial stock is simply the sum of its entries here.")),
+            str(_("     There's no separate 'initial stock' field.")),
             "",
-            "3. La hoja 'Catálogos (referencia)' solo alimenta las listas desplegables — no la edites.",
+            str(_("3. The 'Catalogs (reference)' sheet only feeds the dropdown lists. Don't edit it.")),
             "",
-            "4. Cuando el módulo de carga masiva esté listo, este archivo se podrá subir directamente.",
-            "   Por ahora, sigue llenándolo con calma — no se pierde nada de tu trabajo.",
+            str(_("4. Once the bulk-upload module is ready, this file will be uploadable directly.")),
+            str(_("   For now, keep filling it in at your own pace. None of your work is lost.")),
         ]
         for i, line in enumerate(instructions, start=2):
             cell = ws.cell(row=i, column=1, value=line)
@@ -109,10 +110,11 @@ class Command(BaseCommand):
                 cell.font = Font(bold=True)
         self._autosize(ws, {"A": 100})
 
-        # ---------------------------------------------------- Catálogos (referencia)
-        ref = wb.create_sheet("Catálogos (referencia)")
+        # ---------------------------------------------------- Catalogs (reference)
+        ref = wb.create_sheet(str(_("Catalogs (reference)")))
         for col, title in enumerate(
-            ["Categoría / Subcategoría", "Color", "Presentación", "Proveedor"], start=1
+            [str(_("Category / Subcategory")), str(_("Color")), str(_("Presentation")), str(_("Supplier"))],
+            start=1,
         ):
             ref.cell(row=1, column=col, value=title)
         self._style_header_row(ref, 1, 4)
@@ -131,22 +133,22 @@ class Command(BaseCommand):
             formula = f"'{ref.title}'!${col_letter}$2:${col_letter}${1 + max(count, 1)}"
             wb.defined_names[name] = DefinedName(name, attr_text=formula)
 
-        defined_name("ListaCategoriaSubcategoria", "A", len(category_subcategory_pairs))
-        defined_name("ListaColores", "B", len(colors))
-        defined_name("ListaPresentaciones", "C", len(presentations))
-        defined_name("ListaProveedores", "D", len(suppliers))
+        defined_name("SubcategoryList", "A", len(category_subcategory_pairs))
+        defined_name("ColorList", "B", len(colors))
+        defined_name("PresentationList", "C", len(presentations))
+        defined_name("SupplierList", "D", len(suppliers))
 
-        # ---------------------------------------------------- Productos
-        prod = wb.create_sheet("Productos")
+        # ---------------------------------------------------- Products
+        prod = wb.create_sheet(str(_("Products")))
         headers = [
-            "Código Interno *",
-            "Modelo Base *",
-            "Categoría / Subcategoría *",
-            "Color",
-            "Presentación",
-            "Proveedor",
-            "Precio Sugerido (S/) *",
-            "Stock Mínimo",
+            str(_("Internal Code *")),
+            str(_("Base Model *")),
+            str(_("Category / Subcategory *")),
+            str(_("Color")),
+            str(_("Presentation")),
+            str(_("Supplier")),
+            str(_("Suggested Price (S/) *")),
+            str(_("Minimum Stock")),
         ]
         for col, title in enumerate(headers, start=1):
             prod.cell(row=1, column=col, value=title)
@@ -162,10 +164,10 @@ class Command(BaseCommand):
                 cell.fill = EXAMPLE_FILL
                 cell.font = EXAMPLE_FONT
 
-        dv_catsub = DataValidation(type="list", formula1="=ListaCategoriaSubcategoria", allow_blank=True)
-        dv_color = DataValidation(type="list", formula1="=ListaColores", allow_blank=True)
-        dv_pres = DataValidation(type="list", formula1="=ListaPresentaciones", allow_blank=True)
-        dv_supplier = DataValidation(type="list", formula1="=ListaProveedores", allow_blank=True)
+        dv_catsub = DataValidation(type="list", formula1="=SubcategoryList", allow_blank=True)
+        dv_color = DataValidation(type="list", formula1="=ColorList", allow_blank=True)
+        dv_pres = DataValidation(type="list", formula1="=PresentationList", allow_blank=True)
+        dv_supplier = DataValidation(type="list", formula1="=SupplierList", allow_blank=True)
         for dv in (dv_catsub, dv_color, dv_pres, dv_supplier):
             prod.add_data_validation(dv)
         dv_catsub.add(f"C2:C{LAST_ROW}")
@@ -176,17 +178,23 @@ class Command(BaseCommand):
         self._autosize(prod, {"A": 16, "B": 26, "C": 26, "D": 14, "E": 16, "F": 20, "G": 20, "H": 14})
         prod.freeze_panes = "A2"
 
-        # ---------------------------------------------------- Entradas Iniciales
-        entries = wb.create_sheet("Entradas Iniciales")
+        # ---------------------------------------------------- Initial Entries
+        entries = wb.create_sheet(str(_("Initial Entries")))
         for col, title in enumerate(
-            ["Código Interno *", "Cantidad *", "Costo Unitario (S/) *", "Notas"], start=1
+            [
+                str(_("Internal Code *")),
+                str(_("Quantity *")),
+                str(_("Unit Cost (S/) *")),
+                str(_("Notes")),
+            ],
+            start=1,
         ):
             entries.cell(row=1, column=col, value=title)
         self._style_header_row(entries, 1, 4)
 
         example_entries = [
-            ["P001", 20, 2.00, "Lote 1 — proveedor A"],
-            ["P001", 40, 1.50, "Lote 2 — proveedor B"],
+            ["P001", 20, 2.00, "Lote 1, proveedor A"],
+            ["P001", 40, 1.50, "Lote 2, proveedor B"],
             ["P002", 3, 28.00, "Compra inicial"],
         ]
         for r, row in enumerate(example_entries, start=2):

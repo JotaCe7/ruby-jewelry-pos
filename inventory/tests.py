@@ -11,15 +11,15 @@ from .services import _ean13_check_digit, apply_stock_entry_cost, generate_barco
 
 
 def make_product(sku="SKU-1", cost="4.00", price="10.00"):
-    category, _ = ProductCategory.objects.get_or_create(name="Aretes")
-    subcategory, _ = ProductSubcategory.objects.get_or_create(name="Aretes Tier", category=category)
+    category, _ = ProductCategory.objects.get_or_create(name="Earrings")
+    subcategory, _ = ProductSubcategory.objects.get_or_create(name="Earrings Tier", category=category)
     return Product.objects.create(
         sku=sku,
-        # Not exercising the real EAN-13 generator here — just needs to be
+        # Not exercising the real EAN-13 generator here. Just needs to be
         # unique per sku so multiple make_product() calls in one test
         # don't collide on Product.barcode's unique constraint.
         barcode=sku.zfill(13)[:13],
-        base_model=f"Producto {sku}",
+        base_model=f"Product {sku}",
         subcategory=subcategory,
         suggested_price=Decimal(price),
         unit_cost=Decimal(cost),
@@ -45,7 +45,7 @@ class StockCalculationTests(TestCase):
     entries/audits/exits (sibling reverse relations) in a single
     annotate() JOINs them together and inflates every sum by the other
     tables' row counts. with_stock() and get_current_stock() both use
-    independent Subqueries instead — these tests exercise exactly the
+    independent Subqueries instead. These tests exercise exactly the
     "more than one row on more than one side" shape that would expose a
     regression back to the naive combined-Sum() approach."""
 
@@ -113,7 +113,7 @@ class WeightedAverageCostTests(TestCase):
     def test_entry_without_cost_is_a_noop_for_average(self):
         product = make_product(cost="4.00")
         # A caller that skips calling this entirely (no unit_cost given)
-        # must leave the running average untouched — nothing to assert on
+        # must leave the running average untouched. Nothing to assert on
         # apply_stock_entry_cost itself here beyond documenting the
         # convention, since it's the *caller's* job to skip the call.
         InventoryEntry.objects.create(date="2026-01-01", product=product, quantity=10, unit_cost=None)
@@ -143,15 +143,15 @@ class InventoryAuditApiTests(TestCase):
         self.assertEqual(response.data["theoretical_stock_snapshot"], 20)
         self.assertEqual(response.data["loss_adjustment"], 2)
         self.assertEqual(Decimal(response.data["loss_value"]), Decimal("8.00"))  # 2 * cost(4.00)
-        # The shrinkage is netted directly in the stock formula — no
+        # The shrinkage is netted directly in the stock formula. No
         # compensating InventoryExit row is created for it.
         self.assertEqual(get_current_stock(product), 18)
 
 
 class InventoryDamageApiTests(TestCase):
     """A damage report is Admin-only, never tied to a Sale, and reduces
-    stock directly (see StockCalculationTests) — distinct from the old
-    Sale-line-based "Dañado" movement type, which required a fake S/0
+    stock directly (see StockCalculationTests). Distinct from the old
+    Sale-line-based DAMAGED movement type, which required a fake S/0
     sale just to record a loss."""
 
     def setUp(self):
@@ -220,8 +220,8 @@ class InventoryDamageApiTests(TestCase):
 
 class BarcodeGenerationTests(TestCase):
     def test_checksum_matches_a_known_real_world_ean13(self):
-        # 4006381333931 is a commonly-cited real EAN-13 (Kinder Bueno) —
-        # verifies the checksum formula itself against ground truth,
+        # 4006381333931 is a commonly-cited real EAN-13 (Kinder Bueno),
+        # verifying the checksum formula itself against ground truth,
         # independent of this project's own generation logic.
         self.assertEqual(_ean13_check_digit("400638133393"), "1")
 
@@ -257,16 +257,16 @@ class ProductBarcodeApiTests(TestCase):
         self.admin = User.objects.create_user(username="admin2", password="x", is_staff=True)
         self.client = APIClient()
         self.client.force_authenticate(user=self.admin)
-        category, _ = ProductCategory.objects.get_or_create(name="Aretes")
+        category, _ = ProductCategory.objects.get_or_create(name="Earrings")
         self.subcategory, _ = ProductSubcategory.objects.get_or_create(
-            name="Aretes Tier", category=category
+            name="Earrings Tier", category=category
         )
 
     def test_creating_without_a_barcode_auto_generates_one(self):
         response = self.client.post(
             "/api/inventory/products/",
             {
-                "base_model": "Aretes S/5",
+                "base_model": "Earrings S/5",
                 "subcategory": self.subcategory.id,
                 "suggested_price": "5.00",
             },
@@ -279,7 +279,7 @@ class ProductBarcodeApiTests(TestCase):
         response = self.client.post(
             "/api/inventory/products/",
             {
-                "base_model": "Aretes S/8",
+                "base_model": "Earrings S/8",
                 "subcategory": self.subcategory.id,
                 "suggested_price": "8.00",
                 "barcode": "7501234567890",
@@ -295,7 +295,7 @@ class ProductBarcodeApiTests(TestCase):
         response = self.client.post(
             "/api/inventory/products/",
             {
-                "base_model": "Aretes Duplicado",
+                "base_model": "Earrings Duplicate",
                 "subcategory": self.subcategory.id,
                 "suggested_price": "5.00",
                 "barcode": "7501234567890",
@@ -306,18 +306,18 @@ class ProductBarcodeApiTests(TestCase):
 
 
 class ProductHierarchicalCodeTests(TestCase):
-    """Product.sku — repurposed as the subcategory's code + a 3-digit
+    """Product.sku: repurposed as the subcategory's code + a 3-digit
     sequence scoped to that subcategory, auto-generated and never
     editable afterward. Same reasoning as
     catalogs.tests.HierarchicalCodeTests for Category/Subcategory."""
 
     def setUp(self):
-        self.category = ProductCategory.objects.create(name="Aretes")
+        self.category = ProductCategory.objects.create(name="Earrings")
         self.subcategory = ProductSubcategory.objects.create(
             name="S/5", category=self.category
         )
 
-    def _make(self, base_model="Aretes S/5"):
+    def _make(self, base_model="Earrings S/5"):
         return Product.objects.create(
             base_model=base_model,
             subcategory=self.subcategory,
@@ -337,7 +337,7 @@ class ProductHierarchicalCodeTests(TestCase):
         )
         self._make()
         other_product = Product.objects.create(
-            base_model="Aretes S/8",
+            base_model="Earrings S/8",
             subcategory=other_subcategory,
             suggested_price=Decimal("8.00"),
             min_stock=0,
@@ -350,7 +350,7 @@ class ProductHierarchicalCodeTests(TestCase):
         first.delete()
         third = self._make()
         # Count-based numbering would have reused "...001" (now only one
-        # sibling remains) — MAX-based correctly continues from "...002".
+        # sibling remains). MAX-based correctly continues from "...002".
         self.assertEqual(third.sku, f"{self.subcategory.code}003")
 
     def test_sku_cannot_be_changed_via_the_api(self):
@@ -396,13 +396,13 @@ class GenerateBarcodeOutsideAnAmbientTransactionTests(TransactionTestCase):
         admin = User.objects.create_user(username="admin4", password="x", is_staff=True)
         client = APIClient()
         client.force_authenticate(user=admin)
-        category = ProductCategory.objects.create(name="Aretes")
+        category = ProductCategory.objects.create(name="Earrings")
         subcategory = ProductSubcategory.objects.create(name="S/5", category=category)
 
         response = client.post(
             "/api/inventory/products/",
             {
-                "base_model": "Aretes S/5",
+                "base_model": "Earrings S/5",
                 "subcategory": subcategory.id,
                 "color": None,
                 "presentation": None,
@@ -417,7 +417,7 @@ class GenerateBarcodeOutsideAnAmbientTransactionTests(TransactionTestCase):
 
 
 class ProductPreviewCodeTests(TestCase):
-    """Mirrors catalogs.tests.PreviewCodeTests, one level down — must
+    """Mirrors catalogs.tests.PreviewCodeTests, one level down. Must
     never consume a sequence number, only show what it would be."""
 
     def test_preview_does_not_consume_the_sequence(self):
@@ -428,7 +428,7 @@ class ProductPreviewCodeTests(TestCase):
         admin = User.objects.create_user(username="admin5", password="x", is_staff=True)
         client = APIClient()
         client.force_authenticate(user=admin)
-        category = ProductCategory.objects.create(name="Aretes")
+        category = ProductCategory.objects.create(name="Earrings")
         subcategory = ProductSubcategory.objects.create(name="S/5", category=category)
 
         first = client.get("/api/inventory/products/preview_code/", {"subcategory": subcategory.id})
@@ -437,7 +437,7 @@ class ProductPreviewCodeTests(TestCase):
         self.assertEqual(second.data["code"], f"{subcategory.code}001")
 
         Product.objects.create(
-            base_model="Aretes S/5",
+            base_model="Earrings S/5",
             subcategory=subcategory,
             suggested_price=Decimal("5.00"),
             min_stock=0,

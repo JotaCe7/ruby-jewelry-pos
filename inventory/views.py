@@ -48,8 +48,8 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 
 class PriceTierViewSet(viewsets.ModelViewSet):
-    # Pricing strategy — Admin-only; already exposed read-only to everyone
-    # nested inside ProductSerializer.price_tiers.
+    # Pricing strategy is Admin-only. It's already exposed read-only to
+    # everyone nested inside ProductSerializer.price_tiers.
     queryset = PriceTier.objects.all()
     serializer_class = PriceTierSerializer
     filterset_fields = ["product"]

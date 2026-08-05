@@ -14,11 +14,11 @@ class PriceTierSerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
-    # sku is read-only (Product.editable=False) — Product.save() assigns
+    # sku is read-only (Product.editable=False). Product.save() assigns
     # it as the parent subcategory's hierarchical code + a sequential
     # suffix, never user input, per DRF auto-detecting editable=False.
     # Optional on input: create() auto-generates a sequential EAN-13 when
-    # left blank — still editable, e.g. to use a supplier's own barcode.
+    # left blank, though it remains editable, e.g. to use a supplier's own barcode.
     barcode = serializers.CharField(required=False, allow_blank=True)
     subcategory_name = serializers.CharField(source="subcategory.name", read_only=True)
     category_name = serializers.CharField(source="subcategory.category.name", read_only=True)
