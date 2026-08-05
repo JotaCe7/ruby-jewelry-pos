@@ -72,7 +72,7 @@ class SaleDocumentSerializer(serializers.ModelSerializer):
             "document_type",
             "document_type_display",
             "series",
-            "correlativo",
+            "sequence_number",
             "document_number",
             "status",
             "status_display",
@@ -91,7 +91,7 @@ class SaleDocumentSerializer(serializers.ModelSerializer):
         ]
 
     def get_document_number(self, obj) -> str:
-        return f"{obj.series}-{obj.correlativo:06d}"
+        return f"{obj.series}-{obj.sequence_number:06d}"
 
 
 class VoidDocumentSerializer(serializers.Serializer):
@@ -220,7 +220,7 @@ class DraftSaleLineSerializer(serializers.ModelSerializer):
 
 class DraftSaleSerializer(serializers.ModelSerializer):
     # Deliberately lenient (no cross-field validation like the required
-    # payment_method-for-SALE rule) — a draft is a work in progress by
+    # payment_method-for-SALE rule). A draft is a work in progress by
     # definition; that rule is enforced only at finalize time.
     lines = DraftSaleLineSerializer(many=True)
     customer_name = serializers.CharField(source="customer.name", read_only=True, default=None)

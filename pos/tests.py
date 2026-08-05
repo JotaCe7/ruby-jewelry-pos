@@ -36,18 +36,18 @@ from .services import (
 User = get_user_model()
 
 
-def make_product(sku="SKU-1", price="10.00", cost="4.00", category_name="Aretes"):
+def make_product(sku="SKU-1", price="10.00", cost="4.00", category_name="Earrings"):
     category, _ = ProductCategory.objects.get_or_create(name=category_name)
     subcategory, _ = ProductSubcategory.objects.get_or_create(
         name=f"{category_name} Tier", category=category
     )
     return Product.objects.create(
         sku=sku,
-        # Not exercising the real EAN-13 generator here — just needs to be
+        # Not exercising the real EAN-13 generator here. It just needs to be
         # unique per sku so multiple make_product() calls in one test
         # don't collide on Product.barcode's unique constraint.
         barcode=sku.zfill(13)[:13],
-        base_model=f"Producto {sku}",
+        base_model=f"Product {sku}",
         subcategory=subcategory,
         suggested_price=Decimal(price),
         unit_cost=Decimal(cost),
@@ -162,7 +162,7 @@ class CreateSaleFromLinesTests(TestCase):
         self.assertEqual(sale.date, get_process_date())
         self.assertEqual(sale.documents.count(), 1)
         document = sale.documents.first()
-        self.assertEqual(document.document_type, DocumentType.NOTA_VENTA)
+        self.assertEqual(document.document_type, DocumentType.SALES_RECEIPT)
         # Prices are IGV-inclusive: base = total / 1.18.
         self.assertEqual(document.total, Decimal("23.60"))
         self.assertEqual(document.subtotal, Decimal("20.00"))
@@ -241,8 +241,8 @@ class ClosingTotalsReconciliationTests(TestCase):
         )
 
     def test_breakdowns_reconcile_with_total_sales(self):
-        product1 = make_product(sku="A", price="11.80", category_name="Aretes")
-        product2 = make_product(sku="B", price="23.60", category_name="Collares")
+        product1 = make_product(sku="A", price="11.80", category_name="Earrings")
+        product2 = make_product(sku="B", price="23.60", category_name="Necklaces")
         self._sell(product1, 2, "11.80")
         self._sell(product2, 1, "23.60")
 
@@ -377,11 +377,11 @@ class VoidDocumentTests(TestCase):
             document, reason="x", pin="1234", performed_by=self.seller
         )
 
-        self.assertEqual(credit_note.document_type, DocumentType.NOTA_CREDITO)
+        self.assertEqual(credit_note.document_type, DocumentType.CREDIT_NOTE)
         self.assertEqual(credit_note.related_document, document)
         self.assertEqual(credit_note.total, document.total)
         self.assertEqual(credit_note.series, "NC01")
-        self.assertEqual(credit_note.correlativo, 1)
+        self.assertEqual(credit_note.sequence_number, 1)
 
     def test_cannot_void_already_voided_document(self):
         sale = self._sell()
@@ -395,7 +395,7 @@ class VoidDocumentTests(TestCase):
     def test_cannot_void_non_nota_venta(self):
         sale = self._sell()
         document = sale.documents.first()
-        document.document_type = DocumentType.BOLETA
+        document.document_type = DocumentType.RECEIPT
         document.save()
 
         with self.assertRaises(DocumentNotVoidableError):
