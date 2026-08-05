@@ -13,11 +13,11 @@ SECRET_KEY = config("DJANGO_SECRET_KEY", default="django-insecure-dev-key-change
 DEBUG = config("DJANGO_DEBUG", default=True, cast=bool)
 ALLOWED_HOSTS = config("DJANGO_ALLOWED_HOSTS", default="localhost,127.0.0.1", cast=Csv())
 
-# "dev" | "staging" | "production" — distinct from DEBUG, which is False
+# "dev" | "staging" | "production": distinct from DEBUG, which is False
 # in both staging and production and so can't tell them apart. Sourced
 # from DEPLOY_ENV, already set in .env.<environment> and passed through
 # to the container by each deploy workflow (docker-compose.yml's
-# env_file: .env.${DEPLOY_ENV}) — nothing new to wire up.
+# env_file: .env.${DEPLOY_ENV}). Nothing new to wire up.
 ENVIRONMENT = config("DEPLOY_ENV", default="dev")
 
 INSTALLED_APPS = [
@@ -147,7 +147,7 @@ CORS_ALLOWED_ORIGINS = config(
     cast=Csv(),
 )
 
-# Same origins as CORS above — Django's own CSRF protection (used by
+# Same origins as CORS above. Django's own CSRF protection (used by
 # session-based views like /admin/, separate from the JWT-based API auth)
 # requires this explicitly since Django 4: without it, any POST from the
 # frontend's real origin (e.g. https://ruby-pos.tail431802.ts.net:8443)
@@ -155,7 +155,7 @@ CORS_ALLOWED_ORIGINS = config(
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 # nginx terminates TLS and forwards to gunicorn over plain HTTP, setting
-# X-Forwarded-Proto (see nginx.conf) — without this, Django can't tell the
+# X-Forwarded-Proto (see nginx.conf). Without this, Django can't tell the
 # original request was HTTPS, which breaks CSRF's origin/scheme check and
 # would make secure cookies below never get sent.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

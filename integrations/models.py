@@ -20,4 +20,4 @@ class DailyExchangeRate(models.Model):
         ordering = ["-date"]
 
     def __str__(self):
-        return f"{self.date} — {self.value}"
+        return f"{self.date} ({self.value})"

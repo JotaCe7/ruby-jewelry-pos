@@ -13,7 +13,7 @@ from pos.services import compute_closing_totals, get_process_date
 def get_today_snapshot():
     """Live, in-progress numbers for the Admin walking the floor: each
     seller's sales since they opened their register today (same math as
-    an X-closing preview, just without the PIN gate — nothing is executed
+    an X-closing preview, just without the PIN gate: nothing is executed
     or persisted here), plus which products need restocking right now."""
     sellers = []
     for session in CashRegisterSession.objects.select_related("seller").order_by("seller__username"):
@@ -52,11 +52,11 @@ def get_today_snapshot():
 def get_summary(date_from, date_to):
     """One aggregation pass over every SALE/GIFT exit in range, computing
     income, per-payment-method, per-seller and per-supplier breakdowns
-    together — deliberately plain Python aggregation (not combined
+    together. This is deliberately plain Python aggregation (not combined
     annotate()s) at this shop's scale, sidestepping the Sum-fan-out risk
     documented on Product.with_stock(). Damage reports are a separate,
-    Admin-only event unrelated to any Sale/seller — aggregated on their
-    own below, the same way audit shrinkage already is."""
+    Admin-only event unrelated to any Sale/seller. They are aggregated on
+    their own below, the same way audit shrinkage already is."""
     exits = InventoryExit.objects.filter(
         sale__date__gte=date_from, sale__date__lte=date_to, sale__is_voided=False
     ).select_related("product__supplier", "payment_method", "sale__seller")
@@ -73,11 +73,11 @@ def get_summary(date_from, date_to):
         seller = exit_row.sale.seller
         seller_key = seller.id if seller else None
         seller_bucket = by_seller[seller_key]
-        seller_bucket["username"] = seller.username if seller else "—"
+        seller_bucket["username"] = seller.username if seller else "N/A"
 
         if exit_row.movement_type == MovementType.SALE:
             total_income += exit_row.final_price
-            method_name = exit_row.payment_method.name if exit_row.payment_method else "—"
+            method_name = exit_row.payment_method.name if exit_row.payment_method else "N/A"
             by_payment_method[method_name] += exit_row.final_price
             seller_bucket["total_sales"] += exit_row.final_price
             sale_ids_by_seller[seller_key].add(exit_row.sale_id)

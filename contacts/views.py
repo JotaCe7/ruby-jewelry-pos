@@ -8,7 +8,7 @@ from .serializers import CustomerSerializer, SupplierSerializer
 
 
 class SupplierViewSet(viewsets.ModelViewSet):
-    # Purchasing/finance concept — a Seller never touches suppliers.
+    # Purchasing/finance concept. A Seller never touches suppliers.
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
     permission_classes = [IsAdminUser]

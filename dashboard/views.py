@@ -16,8 +16,8 @@ class TodayView(APIView):
 
 
 class SummaryView(APIView):
-    """Defaults to month-to-date when no range is given — the common case
-    for "how am I doing this month" — but accepts explicit date_from/
+    """Defaults to month-to-date when no range is given (the common case
+    for "how am I doing this month"), but accepts explicit date_from/
     date_to (YYYY-MM-DD) to look at any other period."""
 
     permission_classes = [IsAdminUser]

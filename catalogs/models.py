@@ -12,13 +12,13 @@ class ExpenseCategory(NamedCatalogModel):
 
 class PaymentMethod(NamedCatalogModel):
     # Drives the finance rule that a payment reference is required unless
-    # the method is cash — matched by this flag rather than the editable
+    # the method is cash: matched by this flag rather than the editable
     # `name`, since an admin could rename "Efectivo" at any time. NOT the
     # same concept as `is_default` below: a method can require a reference
     # (is_cash=False) and still be the one preselected in POS, e.g. "Caja"
     # (a mall's shared register, which does give a voucher to reconcile).
     is_cash = models.BooleanField(default=False)
-    # Preselected payment method on a new POS ticket. Exclusive — saving a
+    # Preselected payment method on a new POS ticket. Exclusive: saving a
     # method with is_default=True clears it from every other one, so this
     # never has to be enforced correctly by every caller (API, admin, shell).
     is_default = models.BooleanField(default=False)
@@ -38,10 +38,10 @@ class PaymentMethod(NamedCatalogModel):
 
 class CategoryCodeSequence(models.Model):
     """Singleton row (always pk=1) tracking the next 2-digit
-    ProductCategory.code — global, unlike Subcategory/Product codes
+    ProductCategory.code: global, unlike Subcategory/Product codes
     which are scoped to their parent. Locked via select_for_update
     before allocating, same pattern as inventory.models.BarcodeSequence
-    and pos.models.DocumentSeries' correlativo."""
+    and pos.models.DocumentSeries' sequence number."""
 
     next_value = models.PositiveIntegerField(default=1)
 
@@ -56,7 +56,7 @@ class ProductCategory(NamedCatalogModel):
     # picker in hierarchical mode.
     image = models.ImageField(upload_to="product_categories/", null=True, blank=True)
     # Auto-generated (2-digit sequential, e.g. "01") and never editable
-    # afterward — distinct from `name`, which can be freely corrected or
+    # afterward. Distinct from `name`, which can be freely corrected or
     # renamed at any time.
     # editable=False also makes DRF's ModelSerializer expose this
     # read-only automatically.
@@ -89,8 +89,8 @@ class ProductSubcategory(NamedCatalogModel):
     )
     image = models.ImageField(upload_to="product_subcategories/", null=True, blank=True)
     # Auto-generated as the parent category's code + a 2-digit sequential
-    # number scoped to that category (e.g. "0101", "0102" under "01") —
-    # never editable afterward, same reasoning as ProductCategory.code.
+    # number scoped to that category (e.g. "0101", "0102" under "01").
+    # Never editable afterward, same reasoning as ProductCategory.code.
     code = models.CharField(max_length=4, unique=True, editable=False, blank=True)
 
     class Meta(NamedCatalogModel.Meta):

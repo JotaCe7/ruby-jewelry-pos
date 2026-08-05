@@ -1,11 +1,11 @@
 def preview_next_category_code() -> str:
     """Best-effort preview of what ProductCategory.save() would assign
-    next — reads CategoryCodeSequence.next_value without locking it
+    next: reads CategoryCodeSequence.next_value without locking it
     (nothing is actually being created yet, so there's nothing to lock).
     The real save() always computes the authoritative value itself
     under select_for_update; this is only for showing the user what to
     expect before they click save. If two categories were created at
-    the exact same instant this could be off by one — a non-issue at
+    the exact same instant this could be off by one. That's a non-issue at
     this app's real concurrency (1-2 users)."""
     from .models import CategoryCodeSequence
 
@@ -14,7 +14,7 @@ def preview_next_category_code() -> str:
 
 
 def preview_next_subcategory_code(category) -> str:
-    """Same idea as preview_next_category_code, one level down — mirrors
+    """Same idea as preview_next_category_code, one level down, mirroring
     the MAX-based logic in ProductSubcategory.save() exactly (must stay
     in sync with it if that logic ever changes)."""
     from .models import ProductSubcategory

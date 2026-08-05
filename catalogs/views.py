@@ -26,7 +26,7 @@ from .services import preview_next_category_code, preview_next_subcategory_code
 
 
 class ExpenseCategoryViewSet(viewsets.ModelViewSet):
-    # Finance-only concept — a Seller never needs to see expense categories.
+    # Finance-only concept: a Seller never needs to see expense categories.
     queryset = ExpenseCategory.objects.all()
     serializer_class = ExpenseCategorySerializer
     permission_classes = [IsAdminUser]

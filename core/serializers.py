@@ -9,7 +9,7 @@ from .models import DocumentType, Gender
 
 User = get_user_model()
 
-# Optional everywhere except production — lets staging/dev testing create
+# Optional everywhere except production, letting staging/dev testing create
 # a user without filling in every field, while production keeps a
 # complete record for every real employee.
 PROFILE_FIELDS_REQUIRED_IN_PRODUCTION = [
@@ -75,7 +75,7 @@ class UserSerializer(serializers.ModelSerializer):
         for field in PROFILE_FIELDS_REQUIRED_IN_PRODUCTION:
             # A field not included in this request (e.g. the "activar/
             # desactivar" toggle only ever sends is_active) falls back to
-            # its already-saved value — the requirement applies to the
+            # its already-saved value. The requirement applies to the
             # user's full record, not to whatever subset this one PATCH
             # happens to touch.
             value = profile_data[field] if field in profile_data else getattr(existing_profile, field, None)
@@ -95,8 +95,8 @@ class UserSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         # The post_save signal (core/models.py) creates this at the same
-        # time as the User itself, so this is just accessing it — never
-        # a conditional/lazy creation path.
+        # time as the User itself, so this is just accessing it (never
+        # a conditional/lazy creation path).
         return super().to_representation(instance)
 
     def create(self, validated_data):

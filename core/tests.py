@@ -72,7 +72,7 @@ class UserAccountApiTests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_profile_fields_are_optional_outside_production(self):
-        # ENVIRONMENT defaults to "dev" when not overridden below — this
+        # ENVIRONMENT defaults to "dev" when not overridden below. This
         # documents that default rather than depending on it silently.
         response = self.client.post(
             "/api/core/users/", {"username": "bare_user", "password": "x123456789"}, format="json"

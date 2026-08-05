@@ -13,7 +13,7 @@ from .serializers import ExpenseSerializer
 
 
 class ExpenseViewSet(viewsets.ModelViewSet):
-    # Finance is Admin-only — a Seller has no reason to see the shop's
+    # Finance is Admin-only. A Seller has no reason to see the shop's
     # expenses or margins.
     queryset = Expense.objects.select_related("category", "supplier", "payment_method").all()
     serializer_class = ExpenseSerializer
