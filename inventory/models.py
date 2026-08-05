@@ -82,12 +82,12 @@ class BarcodeSequence(models.Model):
 class Product(TimeStampedModel):
     # Auto-generated as the parent subcategory's code + a 3-digit
     # sequential number scoped to that subcategory (e.g. "0101001",
-    # "0101002" under subcategory "0101"). Never editable afterward.
-    # Replaces the old abbreviation-based generator (e.g. "ARE-FAN"):
-    # the field name stays `sku` since it's referenced throughout
-    # pos/dashboard/inventory, but what it holds and how it behaves both
-    # changed. editable=False also makes DRF's ModelSerializer expose
-    # this read-only automatically.
+    # "0101002" under subcategory "0101"). Never editable afterward. The
+    # field name stays `sku` since it's referenced throughout
+    # pos/dashboard/inventory, even though it holds this hierarchical
+    # code rather than an abbreviation-based value (e.g. "ARE-FAN").
+    # editable=False also makes DRF's ModelSerializer expose this
+    # read-only automatically.
     sku = models.CharField(max_length=50, unique=True, editable=False, blank=True)
     # Auto-generated (see inventory.services.generate_barcode) but editable,
     # e.g. if a supplier's own barcode should be used instead. Validated

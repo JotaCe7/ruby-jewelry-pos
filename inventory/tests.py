@@ -41,13 +41,13 @@ def make_exit(product, quantity, movement_type=MovementType.SALE):
 
 
 class StockCalculationTests(TestCase):
-    """Regression coverage for the fan-out bug: combining Sum()s over
-    entries/audits/exits (sibling reverse relations) in a single
-    annotate() JOINs them together and inflates every sum by the other
-    tables' row counts. with_stock() and get_current_stock() both use
-    independent Subqueries instead. These tests exercise exactly the
-    "more than one row on more than one side" shape that would expose a
-    regression back to the naive combined-Sum() approach."""
+    """Combining Sum()s over entries/audits/exits (sibling reverse
+    relations) in a single annotate() would JOIN them together and inflate
+    every sum by the other tables' row counts, so with_stock() and
+    get_current_stock() both use independent Subqueries instead. These
+    tests exercise exactly the "more than one row on more than one side"
+    shape that would expose a fan-out if a combined Sum() ever crept back
+    in."""
 
     def test_stock_nets_entries_audits_and_exits_with_multiple_rows_each(self):
         product = make_product()
@@ -373,16 +373,14 @@ class ProductHierarchicalCodeTests(TestCase):
 
 
 class GenerateBarcodeOutsideAnAmbientTransactionTests(TransactionTestCase):
-    """Regression test for a real bug: generate_barcode() used
-    select_for_update() without wrapping it in its own
-    transaction.atomic(), which only worked by accident under plain
-    TestCase (every test method there already runs inside an implicit
-    outer transaction, which happily hid the missing one). A real
-    request via ProductSerializer.create() has no such ambient
-    transaction, so every product creation through the API failed with
-    TransactionManagementError until this was fixed. TransactionTestCase
-    (unlike TestCase) does NOT wrap tests in a transaction, so this is
-    the one test in the suite that actually exercises that gap."""
+    """generate_barcode()'s select_for_update() needs its own
+    transaction.atomic(), since a caller like ProductSerializer.create()
+    has no ambient transaction of its own to rely on. Plain TestCase
+    wouldn't catch a missing one: every test method there already runs
+    inside an implicit outer transaction, so select_for_update() would
+    work anyway. TransactionTestCase (unlike TestCase) does NOT wrap
+    tests in a transaction, so this is the one test in the suite that
+    actually exercises that requirement."""
 
     def test_generate_barcode_works_with_no_ambient_transaction(self):
         barcode = generate_barcode()
