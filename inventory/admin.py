@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import InventoryAudit, InventoryEntry, PriceTier, Product
+from .models import InventoryAudit, InventoryDamage, InventoryEntry, PriceTier, Product
 
 
 class PriceTierInline(admin.TabularInline):
@@ -43,5 +43,12 @@ class InventoryAuditAdmin(admin.ModelAdmin):
         "loss_adjustment",
         "loss_value",
     ]
+    list_filter = ["product"]
+    date_hierarchy = "date"
+
+
+@admin.register(InventoryDamage)
+class InventoryDamageAdmin(admin.ModelAdmin):
+    list_display = ["date", "product", "quantity", "unit_cost_snapshot", "responsible", "reported_by"]
     list_filter = ["product"]
     date_hierarchy = "date"

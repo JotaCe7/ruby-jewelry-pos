@@ -9,7 +9,7 @@ from django.utils.translation import gettext_lazy as _
 
 
 class RegisterError(Exception):
-    """Base for all register/closing business-rule violations — views catch
+    """Base for all register/closing business-rule violations. Views catch
     this one class and turn it into a 400 with the message as-is."""
 
 
@@ -67,7 +67,7 @@ def get_process_date():
 
 
 def ensure_register_open(seller):
-    """Raises unless `seller` currently has an open register — called at the
+    """Raises unless `seller` currently has an open register. Called at the
     top of create_sale_from_lines so a sale can never be attributed to
     someone who hasn't (or no longer has) their register open."""
     from .models import CashRegisterSession
@@ -79,7 +79,7 @@ def ensure_register_open(seller):
 
 
 def open_register(user):
-    """Self-service open. A Vendedor can only open onto 'today'; if the
+    """Self-service open. A Seller can only open onto 'today'; if the
     global process date is behind today and nobody else has a session open
     (i.e. the gap days had no activity at all), it jumps straight to today
     instead of forcing empty closings for the skipped days."""
@@ -113,7 +113,7 @@ def open_register(user):
 def force_open_register(seller):
     """Admin-only escape hatch: opens a specific seller's register under
     whatever the current process_date already is, skipping the 'must equal
-    today' rule — used to attribute a forgotten sale to an already-closed
+    today' rule. Used to attribute a forgotten sale to an already-closed
     date, right before that seller (or the admin) redoes their Z."""
     from .models import CashRegisterSession
 
@@ -126,7 +126,7 @@ def force_open_register(seller):
 
 def set_process_date(new_date):
     """Admin-only: sets the global process date directly. Returns warning
-    flags for the caller (view layer) to surface before/after confirming —
+    flags for the caller (view layer) to surface before/after confirming;
     this function itself never blocks the change."""
     from .models import ProcessDate, RegisterClosing
 
@@ -144,9 +144,9 @@ def set_process_date(new_date):
 def _closing_period(seller, closing_type):
     """Start/end of the window a closing should total up: from the end of
     the seller's last relevant closing since they opened, up to now. An X
-    resets against the last X-or-Z; a Z resets against the last Z only (so
-    intermediate X's don't shrink what the Z reports) — 'la Z es todo desde
-    la última Z', per spec."""
+    resets against the last X-or-Z; a Z resets against the last Z only. So
+    intermediate X's don't shrink what the Z reports. A Z always totals
+    everything since the previous Z."""
     from .models import CashRegisterSession, ClosingType, RegisterClosing
 
     session = CashRegisterSession.objects.filter(seller=seller).first()
@@ -165,14 +165,14 @@ def _closing_period(seller, closing_type):
 
 def _document_breakdown(seller, period_start, period_end):
     """Per (document_type, series) issued in the period: first/last
-    correlativo (voided documents keep their number in this range — a
-    correlativo is never skipped) and the combined amount of the
-    non-voided ones only."""
+    sequence number (voided documents keep their number in this range,
+    since a sequence number is never skipped) and the combined amount of
+    the non-voided ones only."""
     from .models import DocumentStatus, SaleDocument
 
     documents = SaleDocument.objects.filter(
         sale__seller=seller, created_at__gte=period_start, created_at__lt=period_end
-    ).order_by("correlativo")
+    ).order_by("sequence_number")
 
     groups = {}
     for document in documents:
@@ -183,14 +183,14 @@ def _document_breakdown(seller, period_start, period_end):
                 "document_type": document.document_type,
                 "document_type_display": document.get_document_type_display(),
                 "series": document.series,
-                "first_number": document.correlativo,
-                "last_number": document.correlativo,
+                "first_number": document.sequence_number,
+                "last_number": document.sequence_number,
                 "count": 0,
                 "amount": Decimal("0.00"),
             }
             groups[key] = group
-        group["first_number"] = min(group["first_number"], document.correlativo)
-        group["last_number"] = max(group["last_number"], document.correlativo)
+        group["first_number"] = min(group["first_number"], document.sequence_number)
+        group["last_number"] = max(group["last_number"], document.sequence_number)
         group["count"] += 1
         if document.status != DocumentStatus.VOIDED:
             group["amount"] += document.total
@@ -200,7 +200,7 @@ def _document_breakdown(seller, period_start, period_end):
 
 def _sale_exits_in_period(seller, period_start, period_end):
     """SALE-movement lines (never GIFT/DAMAGED, never voided) in the
-    period — the shared base query for category/product breakdowns."""
+    period. Shared base query for category/product breakdowns."""
     from .models import InventoryExit, MovementType
 
     return InventoryExit.objects.filter(
@@ -272,7 +272,7 @@ def compute_closing_totals(seller, closing_type, include_product_breakdown=False
         sale_ids.add(exit_row.sale_id)
         if exit_row.movement_type == MovementType.SALE:
             total_sales += exit_row.final_price
-            method_name = exit_row.payment_method.name if exit_row.payment_method else "—"
+            method_name = exit_row.payment_method.name if exit_row.payment_method else "N/A"
             by_payment_method[method_name] += exit_row.final_price
         else:
             total_losses += exit_row.unit_cost_snapshot * exit_row.quantity
@@ -308,7 +308,7 @@ def preview_closing(seller, closing_type, pin, include_product_breakdown=False):
 
 def execute_closing(seller, closing_type, pin, performed_by, include_product_breakdown=False):
     """Impresora mode: validates the PIN, persists a RegisterClosing row,
-    and — for a Z — closes the seller's session and advances the global
+    and, for a Z, closes the seller's session and advances the global
     process date once no session remains open for it."""
     from .models import AdminPin, CashRegisterSession, ClosingType, ProcessDate, RegisterClosing
 
@@ -348,22 +348,22 @@ def execute_closing(seller, closing_type, pin, performed_by, include_product_bre
 
 
 def issue_document(sale, document_type=None):
-    """Allocates the next gapless correlativo for `document_type` (locking
-    the DocumentSeries row so two concurrent sales never collide) and
-    snapshots the customer's identity + IGV-inclusive totals at this
-    instant. Only ever called with NOTA_VENTA today — the other types are
-    reachable through this same function once real electronic invoicing
-    exists, without a schema change."""
+    """Allocates the next gapless sequence number for `document_type`
+    (locking the DocumentSeries row so two concurrent sales never collide)
+    and snapshots the customer's identity + IGV-inclusive totals at this
+    instant. Only ever called with SALES_RECEIPT today. The other types
+    become reachable through this same function once real electronic
+    invoicing exists, without a schema change."""
     from .models import DocumentSeries, DocumentType, SaleDocument
 
-    document_type = document_type or DocumentType.NOTA_VENTA
+    document_type = document_type or DocumentType.SALES_RECEIPT
     customer = sale.customer
 
     DocumentSeries.get_or_create_default(document_type)
     series_row = DocumentSeries.objects.select_for_update().get(document_type=document_type)
-    correlativo = series_row.next_correlativo
-    series_row.next_correlativo += 1
-    series_row.save(update_fields=["next_correlativo"])
+    sequence_number = series_row.next_sequence_number
+    series_row.next_sequence_number += 1
+    series_row.save(update_fields=["next_sequence_number"])
 
     total = sum((line.final_price for line in sale.lines.all()), Decimal("0.00"))
     subtotal = (total / Decimal("1.18")).quantize(Decimal("0.01"))
@@ -373,7 +373,7 @@ def issue_document(sale, document_type=None):
         sale=sale,
         document_type=document_type,
         series=series_row.series,
-        correlativo=correlativo,
+        sequence_number=sequence_number,
         customer_name=customer.name if customer else "",
         customer_document_type=customer.document_type if customer else "",
         customer_document_number=customer.tax_id if customer else "",
@@ -384,27 +384,27 @@ def issue_document(sale, document_type=None):
 
 
 def issue_credit_note(original_document, performed_by):
-    """Internal Nota de Crédito issued the instant a Nota de Venta is
-    voided — not a real SUNAT document (a Nota de Venta isn't fiscal
-    either), but it gives every anulación its own gapless correlativo, and
+    """Internal Credit Note issued the instant a Sales Receipt is voided.
+    Not a real SUNAT document (a Sales Receipt isn't fiscal
+    either), but it gives every void its own gapless sequence number, and
     critically it's dated *today* regardless of when the original sale
     happened. That's what makes a retroactive correction of an
-    already-closed period's sale show up in *today's* Cierre document
+    already-closed period's sale show up in *today's* Closing document
     breakdown, instead of silently rewriting a period whose totals were
     already printed and handed to someone."""
     from .models import DocumentSeries, DocumentType, SaleDocument
 
-    DocumentSeries.get_or_create_default(DocumentType.NOTA_CREDITO)
-    series_row = DocumentSeries.objects.select_for_update().get(document_type=DocumentType.NOTA_CREDITO)
-    correlativo = series_row.next_correlativo
-    series_row.next_correlativo += 1
-    series_row.save(update_fields=["next_correlativo"])
+    DocumentSeries.get_or_create_default(DocumentType.CREDIT_NOTE)
+    series_row = DocumentSeries.objects.select_for_update().get(document_type=DocumentType.CREDIT_NOTE)
+    sequence_number = series_row.next_sequence_number
+    series_row.next_sequence_number += 1
+    series_row.save(update_fields=["next_sequence_number"])
 
     return SaleDocument.objects.create(
         sale=original_document.sale,
-        document_type=DocumentType.NOTA_CREDITO,
+        document_type=DocumentType.CREDIT_NOTE,
         series=series_row.series,
-        correlativo=correlativo,
+        sequence_number=sequence_number,
         customer_name=original_document.customer_name,
         customer_document_type=original_document.customer_document_type,
         customer_document_number=original_document.customer_document_number,
@@ -416,20 +416,20 @@ def issue_credit_note(original_document, performed_by):
 
 
 def void_document(document, reason, pin, performed_by):
-    """Anulación: only a Nota de Venta can be voided today. Restores the
+    """Voiding: only a Sales Receipt can be voided today. Restores the
     stock it moved via a compensating InventoryEntry per line (no
-    unit_cost, so the product's weighted-average cost is untouched — same
-    convention as any purely physical stock movement), marks both the
-    document and its Sale voided (so every revenue aggregation —
-    compute_closing_totals, dashboard — excludes it from then on), and
-    issues an internal Nota de Crédito referencing it (see
+    unit_cost, so the product's weighted-average cost is untouched, the
+    same convention as any purely physical stock movement), marks both the
+    document and its Sale voided (so every revenue aggregation,
+    compute_closing_totals and dashboard, excludes it from then on), and
+    issues an internal Credit Note referencing it (see
     issue_credit_note). Returns (voided_document, credit_note)."""
     from inventory.models import InventoryEntry
 
     from .models import AdminPin, DocumentStatus, DocumentType
 
-    if document.document_type != DocumentType.NOTA_VENTA:
-        raise DocumentNotVoidableError(_("Only Notas de Venta can be voided for now."))
+    if document.document_type != DocumentType.SALES_RECEIPT:
+        raise DocumentNotVoidableError(_("Only Sales Receipts can be voided for now."))
     if document.status == DocumentStatus.VOIDED:
         raise DocumentNotVoidableError(_("This document has already been voided."))
     if not AdminPin.find_by_pin(pin):
@@ -442,7 +442,8 @@ def void_document(document, reason, pin, performed_by):
                 date=get_process_date(),
                 product=exit_row.product,
                 quantity=exit_row.quantity,
-                notes=f"Devolución por anulación de {document.series}-{document.correlativo:06d}",
+                notes=_("Return from voiding %(series)s-%(sequence_number)06d.")
+                % {"series": document.series, "sequence_number": document.sequence_number},
             )
 
         sale.is_voided = True
@@ -466,9 +467,9 @@ def create_sale_from_lines(customer, seller, lines_data):
     promoted to a real sale goes through identical logic to one created
     in a single request.
 
-    The sale is always dated to the current global process date — never a
-    client-supplied one — and requires `seller` to have an open register.
-    Issuing its Nota de Venta happens in the same transaction, so a sale
+    The sale is always dated to the current global process date, never a
+    client-supplied one, and requires `seller` to have an open register.
+    Issuing its Sales Receipt happens in the same transaction, so a sale
     is never left without its printable document.
 
     Each line dict has: product, movement_type, quantity, unit_price,

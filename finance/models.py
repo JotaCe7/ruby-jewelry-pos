@@ -7,9 +7,9 @@ from core.models import TimeStampedModel
 
 
 class ReceiptType(models.TextChoices):
-    BOLETA = "BOLETA", _("Simplified receipt")
-    FACTURA = "FACTURA", _("Invoice")
-    RECIBO = "RECIBO", _("Voucher")
+    RECEIPT = "BOLETA", _("Simplified receipt")
+    INVOICE = "FACTURA", _("Invoice")
+    VOUCHER = "RECIBO", _("Voucher")
     NONE = "NONE", _("None")
 
 
@@ -42,7 +42,7 @@ class Expense(TimeStampedModel):
     payment_reference = models.CharField(max_length=100, blank=True)
     original_amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=3, choices=Currency.choices, default=Currency.PEN)
-    # Frozen at creation time via ExchangeRateService — never recalculated
+    # Frozen at creation time via ExchangeRateService. Never recalculated
     # afterwards, even if that date's cached rate is later corrected.
     exchange_rate = models.DecimalField(max_digits=10, decimal_places=4)
     pen_equivalent_amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -51,4 +51,4 @@ class Expense(TimeStampedModel):
         ordering = ["-date", "-id"]
 
     def __str__(self):
-        return f"{self.date} — {self.description[:40]}"
+        return f"{self.date}: {self.description[:40]}"

@@ -19,11 +19,11 @@ class UserAccountApiTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(user=self.admin)
 
-    def test_admin_can_create_a_vendedor_with_profile_fields(self):
+    def test_admin_can_create_a_seller_with_profile_fields(self):
         response = self.client.post(
             "/api/core/users/",
             {
-                "username": "vendedora1",
+                "username": "seller3",
                 "password": "a-real-password-123",
                 "first_name": "Ana",
                 "phone": "999888777",
@@ -37,7 +37,7 @@ class UserAccountApiTests(TestCase):
         self.assertEqual(response.status_code, 201, response.data)
         self.assertNotIn("password", response.data)
 
-        created = User.objects.get(username="vendedora1")
+        created = User.objects.get(username="seller3")
         self.assertFalse(created.is_staff)
         self.assertTrue(created.check_password("a-real-password-123"))
         self.assertEqual(created.profile.phone, "999888777")
@@ -64,15 +64,15 @@ class UserAccountApiTests(TestCase):
         self.assertEqual(response.status_code, 405)
         self.assertTrue(User.objects.filter(username="seller2").exists())
 
-    def test_vendedor_cannot_access_user_management(self):
-        vendedor = User.objects.create_user(username="vendedor1", password="x", is_staff=False)
+    def test_seller_cannot_access_user_management(self):
+        seller = User.objects.create_user(username="seller4", password="x", is_staff=False)
         client = APIClient()
-        client.force_authenticate(user=vendedor)
+        client.force_authenticate(user=seller)
         response = client.get("/api/core/users/")
         self.assertEqual(response.status_code, 403)
 
     def test_profile_fields_are_optional_outside_production(self):
-        # ENVIRONMENT defaults to "dev" when not overridden below — this
+        # ENVIRONMENT defaults to "dev" when not overridden below. This
         # documents that default rather than depending on it silently.
         response = self.client.post(
             "/api/core/users/", {"username": "bare_user", "password": "x123456789"}, format="json"

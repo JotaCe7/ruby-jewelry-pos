@@ -9,7 +9,7 @@ User = get_user_model()
 
 class PaymentMethodDefaultExclusivityTests(TestCase):
     """PaymentMethod.is_default drives which method auto-preselects on a
-    new POS ticket — it must always be exclusive, no matter which entry
+    new POS ticket. It must always be exclusive, no matter which entry
     point sets it (API, Django admin, or shell), since the model's own
     save() override is what enforces this, not any particular caller."""
 
@@ -53,56 +53,56 @@ class PaymentMethodDefaultExclusivityTests(TestCase):
 
 
 class HierarchicalCodeTests(TestCase):
-    """ProductCategory/ProductSubcategory.code — auto-generated, never
-    editable afterward (the user's own words: "algo que nunca cambie"),
-    distinct from `name`, which stays freely correctable."""
+    """ProductCategory/ProductSubcategory.code: auto-generated, never
+    editable afterward, distinct from `name`, which stays freely
+    correctable."""
 
     def test_categories_get_sequential_2_digit_codes(self):
-        aretes = ProductCategory.objects.create(name="Aretes")
-        collares = ProductCategory.objects.create(name="Collares")
-        self.assertEqual(aretes.code, "01")
-        self.assertEqual(collares.code, "02")
+        earrings = ProductCategory.objects.create(name="Earrings")
+        necklaces = ProductCategory.objects.create(name="Necklaces")
+        self.assertEqual(earrings.code, "01")
+        self.assertEqual(necklaces.code, "02")
 
     def test_subcategories_are_scoped_to_their_category(self):
-        aretes = ProductCategory.objects.create(name="Aretes")
-        collares = ProductCategory.objects.create(name="Collares")
-        s5 = ProductSubcategory.objects.create(name="S/5", category=aretes)
-        s8 = ProductSubcategory.objects.create(name="S/8", category=aretes)
+        earrings = ProductCategory.objects.create(name="Earrings")
+        necklaces = ProductCategory.objects.create(name="Necklaces")
+        s5 = ProductSubcategory.objects.create(name="S/5", category=earrings)
+        s8 = ProductSubcategory.objects.create(name="S/8", category=earrings)
         # A second category's first subcategory still starts at 01 within
         # its own scope, not continuing the first category's count.
-        finos = ProductSubcategory.objects.create(name="Finos", category=collares)
+        fine_sub = ProductSubcategory.objects.create(name="Fine", category=necklaces)
         self.assertEqual(s5.code, "0101")
         self.assertEqual(s8.code, "0102")
-        self.assertEqual(finos.code, "0201")
+        self.assertEqual(fine_sub.code, "0201")
 
     def test_deleting_a_subcategory_never_frees_its_number_for_reuse(self):
-        aretes = ProductCategory.objects.create(name="Aretes")
-        s5 = ProductSubcategory.objects.create(name="S/5", category=aretes)
-        ProductSubcategory.objects.create(name="S/8", category=aretes)
+        earrings = ProductCategory.objects.create(name="Earrings")
+        s5 = ProductSubcategory.objects.create(name="S/5", category=earrings)
+        ProductSubcategory.objects.create(name="S/8", category=earrings)
         s5.delete()
-        xuping = ProductSubcategory.objects.create(name="Xuping", category=aretes)
+        xuping = ProductSubcategory.objects.create(name="Xuping", category=earrings)
         # Count-based numbering would have reused "0101" (now only one
-        # sibling remains) — MAX-based correctly continues from "0102".
+        # sibling remains). MAX-based correctly continues from "0102".
         self.assertEqual(xuping.code, "0103")
 
     def test_code_cannot_be_changed_via_the_api(self):
         admin = User.objects.create_user(username="admin1", password="x", is_staff=True)
         client = APIClient()
         client.force_authenticate(user=admin)
-        aretes = ProductCategory.objects.create(name="Aretes")
+        earrings = ProductCategory.objects.create(name="Earrings")
 
         response = client.patch(
-            f"/api/catalogs/product-categories/{aretes.id}/", {"code": "99"}, format="json"
+            f"/api/catalogs/product-categories/{earrings.id}/", {"code": "99"}, format="json"
         )
 
         self.assertEqual(response.status_code, 200, response.data)
-        aretes.refresh_from_db()
-        self.assertEqual(aretes.code, "01")
+        earrings.refresh_from_db()
+        self.assertEqual(earrings.code, "01")
 
 
 class PreviewCodeTests(TestCase):
     """The create-form preview endpoints must show what a code *would*
-    be without ever actually consuming a sequence number — calling
+    be without ever actually consuming a sequence number. Calling
     preview repeatedly must keep returning the same value until
     something is actually saved."""
 
@@ -117,20 +117,20 @@ class PreviewCodeTests(TestCase):
         self.assertEqual(first.data["code"], "01")
         self.assertEqual(second.data["code"], "01")
 
-        ProductCategory.objects.create(name="Aretes")
+        ProductCategory.objects.create(name="Earrings")
         third = self.client.get("/api/catalogs/product-categories/preview_code/")
         self.assertEqual(third.data["code"], "02")
 
     def test_subcategory_preview_does_not_consume_the_sequence(self):
-        aretes = ProductCategory.objects.create(name="Aretes")
+        earrings = ProductCategory.objects.create(name="Earrings")
         response = self.client.get(
-            "/api/catalogs/product-subcategories/preview_code/", {"category": aretes.id}
+            "/api/catalogs/product-subcategories/preview_code/", {"category": earrings.id}
         )
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data["code"], "0101")
 
-        ProductSubcategory.objects.create(name="S/5", category=aretes)
+        ProductSubcategory.objects.create(name="S/5", category=earrings)
         response = self.client.get(
-            "/api/catalogs/product-subcategories/preview_code/", {"category": aretes.id}
+            "/api/catalogs/product-subcategories/preview_code/", {"category": earrings.id}
         )
         self.assertEqual(response.data["code"], "0102")

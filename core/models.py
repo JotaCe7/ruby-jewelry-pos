@@ -38,8 +38,8 @@ class DocumentType(models.TextChoices):
 
 class UserProfile(TimeStampedModel):
     # Extends Django's built-in User with the extra fields this business
-    # wants on file for Admin/Vendedor accounts, without swapping
-    # AUTH_USER_MODEL — too risky to introduce this deep into a live
+    # wants on file for Admin/Seller accounts, without swapping
+    # AUTH_USER_MODEL. That's too risky to introduce this deep into a live
     # project (every existing FK to User, and the users table itself,
     # would need migrating). A one-to-one side table is additive instead.
     user = models.OneToOneField(
@@ -64,7 +64,7 @@ class UserProfile(TimeStampedModel):
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
 def create_user_profile(sender, instance, created, **kwargs):
     # Guarantees every User has a profile regardless of entry point
-    # (this API, Django admin, `createsuperuser`, the shell) — the same
+    # (this API, Django admin, `createsuperuser`, the shell), matching the same
     # "can't drift no matter who creates it" reasoning as
     # PaymentMethod.is_default's own save() override.
     if created:

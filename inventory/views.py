@@ -8,9 +8,10 @@ from catalogs.models import ProductSubcategory
 from core.permissions import IsAdminOrReadOnly
 
 from .filters import ProductFilter
-from .models import InventoryAudit, InventoryEntry, PriceTier, Product
+from .models import InventoryAudit, InventoryDamage, InventoryEntry, PriceTier, Product
 from .serializers import (
     InventoryAuditSerializer,
+    InventoryDamageSerializer,
     InventoryEntrySerializer,
     PriceTierSerializer,
     ProductSerializer,
@@ -19,7 +20,7 @@ from .services import preview_next_product_code
 
 
 class ProductViewSet(viewsets.ModelViewSet):
-    # A Vendedor needs to browse the catalog (stock/price) from the POS
+    # A Seller needs to browse the catalog (stock/price) from the POS
     # picker, but only Admin edits products.
     serializer_class = ProductSerializer
     filterset_class = ProductFilter
@@ -47,8 +48,8 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 
 class PriceTierViewSet(viewsets.ModelViewSet):
-    # Pricing strategy — Admin-only; already exposed read-only to everyone
-    # nested inside ProductSerializer.price_tiers.
+    # Pricing strategy is Admin-only. It's already exposed read-only to
+    # everyone nested inside ProductSerializer.price_tiers.
     queryset = PriceTier.objects.all()
     serializer_class = PriceTierSerializer
     filterset_fields = ["product"]
@@ -65,5 +66,12 @@ class InventoryEntryViewSet(viewsets.ModelViewSet):
 class InventoryAuditViewSet(viewsets.ModelViewSet):
     queryset = InventoryAudit.objects.select_related("product").all()
     serializer_class = InventoryAuditSerializer
+    filterset_fields = ["product"]
+    permission_classes = [IsAdminUser]
+
+
+class InventoryDamageViewSet(viewsets.ModelViewSet):
+    queryset = InventoryDamage.objects.select_related("product", "responsible", "reported_by").all()
+    serializer_class = InventoryDamageSerializer
     filterset_fields = ["product"]
     permission_classes = [IsAdminUser]

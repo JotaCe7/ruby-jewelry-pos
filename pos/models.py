@@ -13,23 +13,22 @@ from inventory.models import Product
 class MovementType(models.TextChoices):
     SALE = "SALE", _("Sale")
     GIFT = "GIFT", _("Gift / Complimentary")
-    DAMAGED = "DAMAGED", _("Damaged / Broken")
 
 
 class Sale(TimeStampedModel):
-    """Ticket header grouping the lines of a single checkout — needed so
+    """Ticket header grouping the lines of a single checkout. Needed so
     combo/mix-and-match discount proration has a shared scope."""
 
     date = models.DateField()
     customer = models.ForeignKey(
         Customer, on_delete=models.PROTECT, related_name="sales", null=True, blank=True
     )
-    # Whoever was logged in when the sale was finalized — enables daily
+    # Whoever was logged in when the sale was finalized, enabling daily
     # per-seller closing reports.
     seller = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="sales", null=True, blank=True
     )
-    # Set only via void_document() voiding this sale's Nota de Venta — never
+    # Set only via void_document() voiding this sale's Sales Receipt. Never
     # edited directly. A voided sale's lines are kept for the audit trail
     # (stock is restored via a compensating InventoryEntry, not by deleting
     # these rows), but every revenue aggregation (closings, dashboard) must
@@ -40,7 +39,7 @@ class Sale(TimeStampedModel):
         ordering = ["-date", "-id"]
 
     def __str__(self):
-        return f"Sale #{self.pk} — {self.date}"
+        return f"Sale #{self.pk} ({self.date})"
 
 
 class InventoryExit(TimeStampedModel):
@@ -48,10 +47,10 @@ class InventoryExit(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="exits")
     movement_type = models.CharField(max_length=10, choices=MovementType.choices)
     quantity = models.PositiveIntegerField()
-    # Frozen at sale time — reflects whichever unit price applied (flat
+    # Frozen at sale time, reflecting whichever unit price applied (flat
     # suggested_price or a PriceTier), and is never recalculated after.
     unit_price_snapshot = models.DecimalField(max_digits=10, decimal_places=2)
-    # Frozen at sale time too — so a GIFT/DAMAGED loss is valued at what the
+    # Frozen at sale time too, so a GIFT/DAMAGED loss is valued at what the
     # unit actually cost the business then, not at today's average cost.
     unit_cost_snapshot = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     discount_applied = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -69,11 +68,11 @@ class InventoryExit(TimeStampedModel):
         ordering = ["-id"]
 
     def __str__(self):
-        return f"Sale #{self.sale_id} — {self.product.sku} x{self.quantity}"
+        return f"Sale #{self.sale_id} ({self.product.sku} x{self.quantity})"
 
 
 class DraftSale(TimeStampedModel):
-    """Server-persisted in-progress ticket — one per user, survives a dead
+    """Server-persisted in-progress ticket (one per user) that survives a dead
     phone or switching devices mid-sale (unlike a client-only localStorage
     draft). Never touches stock/InventoryExit; only `finalize` (in
     pos/services.py) promotes it into a real Sale, using the exact same
@@ -88,7 +87,7 @@ class DraftSale(TimeStampedModel):
     )
 
     def __str__(self):
-        return f"Draft — {self.created_by}"
+        return f"Draft ({self.created_by})"
 
 
 class DraftSaleLine(TimeStampedModel):
@@ -113,11 +112,11 @@ class DraftSaleLine(TimeStampedModel):
         ordering = ["id"]
 
     def __str__(self):
-        return f"{self.draft_sale_id} — {self.product.sku} x{self.quantity}"
+        return f"{self.draft_sale_id} ({self.product.sku} x{self.quantity})"
 
 
 class ProcessDate(models.Model):
-    """Singleton: the shop's single official business date — never one per
+    """Singleton: the shop's single official business date, never one per
     seller. A Sale is always dated to whatever this is at creation time,
     not to a client-supplied date. Advances automatically (see
     pos/services.py) once every seller who had a session open for the
@@ -137,7 +136,7 @@ class ProcessDate(models.Model):
 
 class CashRegisterSession(TimeStampedModel):
     """Whether this user (seller or admin acting as one) currently has
-    their register open. No process_date of its own — there is only ever
+    their register open. No process_date of its own; there is only ever
     one, global (ProcessDate)."""
 
     seller = models.OneToOneField(
@@ -147,17 +146,17 @@ class CashRegisterSession(TimeStampedModel):
     opened_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return f"{self.seller} — {'abierta' if self.is_open else 'cerrada'}"
+        return f"{self.seller} ({_('open') if self.is_open else _('closed')})"
 
 
 class AdminPin(models.Model):
-    """One PIN per admin — deliberately not tied to that admin's login
+    """One PIN per admin, deliberately not tied to that admin's login
     password, so it survives account changes and isn't the same secret as
-    their login. Any admin's PIN authorizes an X/Z closing or an
-    anulación (find_by_pin checks every admin's hash), but a Cierre Z
+    their login. Any admin's PIN authorizes an X/Z closing or a void
+    (find_by_pin checks every admin's hash), but a Z Closing
     additionally records *which* admin's PIN matched as its
-    `authorized_by` — the whole reason this moved from one shared PIN to
-    one per admin."""
+    `authorized_by` (the whole reason this moved from one shared PIN to
+    one per admin)."""
 
     admin = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="closing_pin"
@@ -194,7 +193,7 @@ class ClosingType(models.TextChoices):
 
 class RegisterClosing(TimeStampedModel):
     """One row per executed (Impresora-mode) X or Z closing. A Pantalla
-    preview never creates one of these — nothing is persisted or changed
+    preview never creates one of these. Nothing is persisted or changed
     until the closing is actually run for real."""
 
     seller = models.ForeignKey(
@@ -209,12 +208,12 @@ class RegisterClosing(TimeStampedModel):
     total_losses = models.DecimalField(max_digits=12, decimal_places=2)
     sale_count = models.PositiveIntegerField()
     # Usually == seller (self-service, the normal case); differs only when
-    # an Admin runs this closing on the seller's behalf — see
+    # an Admin runs this closing on the seller's behalf; see
     # pos/services.py for the one scenario where that happens.
     performed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="closings_performed"
     )
-    # Which admin's PIN authorized this closing — only ever set for a Z
+    # Which admin's PIN authorized this closing, only ever set for a Z
     # (an X doesn't need this level of sign-off). Distinct from
     # performed_by: performed_by is whoever ran the closing (could be the
     # seller themselves), authorized_by is the admin whose personal PIN
@@ -226,16 +225,16 @@ class RegisterClosing(TimeStampedModel):
         blank=True,
         related_name="closings_authorized",
     )
-    # Per (document_type, series): first/last correlativo issued in the
+    # Per (document_type, series): first/last sequence number issued in the
     # period, how many, and their combined amount (voided documents keep
-    # their correlativo in the first/last range but don't count toward
-    # amount — same "excluded from revenue" rule as everywhere else).
+    # their sequence number in the first/last range but don't count toward
+    # amount, following the same "excluded from revenue" rule as everywhere else).
     # Each item: {document_type, document_type_display, series,
     # first_number, last_number, count, amount}.
     document_breakdown = models.JSONField(default=list)
     # Per ProductCategory: {category_id, category_name, quantity, amount}.
     category_breakdown = models.JSONField(default=list)
-    # Per Product — opt-in at closing time (adds paper), so null means
+    # Per Product, opt-in at closing time (adds paper), so null means
     # "not requested" rather than "empty": {product_id, sku, base_model,
     # quantity, amount}.
     product_breakdown = models.JSONField(null=True, blank=True)
@@ -244,21 +243,23 @@ class RegisterClosing(TimeStampedModel):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.get_closing_type_display()} — {self.seller} — {self.process_date}"
+        return f"{self.get_closing_type_display()} ({self.seller}, {self.process_date})"
 
 
 class DocumentType(models.TextChoices):
-    """Only NOTA_VENTA is actually issuable today (internal control, not a
-    SUNAT-valid fiscal document). The rest exist so wiring up real
-    electronic invoicing later — Boleta/Factura via a PSE like Nubefact,
-    and Nota de Crédito/Débito to adjust an already-issued document — is a
-    services/views change, not a schema migration."""
+    """Only SALES_RECEIPT is actually issuable today (internal control, not
+    a SUNAT-valid fiscal document). The rest exist so that wiring up real
+    electronic invoicing later (a Receipt/Invoice via a PSE like Nubefact,
+    and a Credit/Debit Note to adjust an already-issued document) is only a
+    services/views change, not a schema migration. Each member's stored
+    value is frozen (already used by real records) independently of its
+    Python name."""
 
-    NOTA_VENTA = "NOTA_VENTA", _("Sales Receipt")
-    BOLETA = "BOLETA", _("Receipt")
-    FACTURA = "FACTURA", _("Invoice")
-    NOTA_CREDITO = "NOTA_CREDITO", _("Credit Note")
-    NOTA_DEBITO = "NOTA_DEBITO", _("Debit Note")
+    SALES_RECEIPT = "NOTA_VENTA", _("Sales Receipt")
+    RECEIPT = "BOLETA", _("Receipt")
+    INVOICE = "FACTURA", _("Invoice")
+    CREDIT_NOTE = "NOTA_CREDITO", _("Credit Note")
+    DEBIT_NOTE = "NOTA_DEBITO", _("Debit Note")
 
 
 class DocumentStatus(models.TextChoices):
@@ -267,23 +268,23 @@ class DocumentStatus(models.TextChoices):
 
 
 DEFAULT_DOCUMENT_SERIES = {
-    DocumentType.NOTA_VENTA: "NV01",
-    DocumentType.BOLETA: "B001",
-    DocumentType.FACTURA: "F001",
-    DocumentType.NOTA_CREDITO: "NC01",
-    DocumentType.NOTA_DEBITO: "ND01",
+    DocumentType.SALES_RECEIPT: "NV01",
+    DocumentType.RECEIPT: "B001",
+    DocumentType.INVOICE: "F001",
+    DocumentType.CREDIT_NOTE: "NC01",
+    DocumentType.DEBIT_NOTE: "ND01",
 }
 
 
 class DocumentSeries(models.Model):
-    """One row per document type — tracks the next correlativo so numbers
-    are gapless and never reused. `issue_document` locks this row
+    """One row per document type, tracking the next sequence number so
+    numbers are gapless and never reused. `issue_document` locks this row
     (select_for_update) before allocating a number, so two concurrent
     sales can never receive the same one."""
 
     document_type = models.CharField(max_length=15, choices=DocumentType.choices, unique=True)
     series = models.CharField(max_length=10)
-    next_correlativo = models.PositiveIntegerField(default=1)
+    next_sequence_number = models.PositiveIntegerField(default=1)
 
     @classmethod
     def get_or_create_default(cls, document_type):
@@ -294,21 +295,20 @@ class DocumentSeries(models.Model):
         return obj
 
     def __str__(self):
-        return f"{self.series} (next: {self.next_correlativo})"
+        return f"{self.series} (next: {self.next_sequence_number})"
 
 
 class SaleDocument(TimeStampedModel):
-    """The printable, sequentially-numbered comprobante for a Sale. Customer
+    """The printable, sequentially-numbered document for a Sale. Customer
     identity is snapshotted at issuance so a later edit to the Customer
     record never changes what was actually printed. `related_document` is
-    for a future Nota de Crédito/Débito, which always references the
-    document it adjusts — null for a standalone Nota de Venta/Boleta/
-    Factura."""
+    for a future Credit/Debit Note, which always references the document
+    it adjusts, and stays null for a standalone Sales Receipt/Receipt/Invoice."""
 
     sale = models.ForeignKey(Sale, on_delete=models.PROTECT, related_name="documents")
     document_type = models.CharField(max_length=15, choices=DocumentType.choices)
     series = models.CharField(max_length=10)
-    correlativo = models.PositiveIntegerField()
+    sequence_number = models.PositiveIntegerField()
     status = models.CharField(
         max_length=10, choices=DocumentStatus.choices, default=DocumentStatus.ISSUED
     )
@@ -341,8 +341,8 @@ class SaleDocument(TimeStampedModel):
     class Meta:
         ordering = ["-id"]
         constraints = [
-            models.UniqueConstraint(fields=["series", "correlativo"], name="unique_series_correlativo")
+            models.UniqueConstraint(fields=["series", "sequence_number"], name="unique_series_sequence_number")
         ]
 
     def __str__(self):
-        return f"{self.series}-{self.correlativo:06d}"
+        return f"{self.series}-{self.sequence_number:06d}"

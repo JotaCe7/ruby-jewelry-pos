@@ -23,7 +23,7 @@ class PaymentMethodSerializer(serializers.ModelSerializer):
 
 
 class ProductCategorySerializer(serializers.ModelSerializer):
-    # code is read-only (ProductCategory.editable=False) — save() assigns
+    # code is read-only (ProductCategory.editable=False). save() assigns
     # it as an auto-incrementing 2-digit sequence, never user input.
     class Meta:
         model = ProductCategory
@@ -33,7 +33,7 @@ class ProductCategorySerializer(serializers.ModelSerializer):
 class ProductSubcategorySerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
 
-    # code is read-only (ProductSubcategory.editable=False) — save()
+    # code is read-only (ProductSubcategory.editable=False). save()
     # assigns it as the parent category's code + a sequence scoped to
     # that category, never user input.
     class Meta:

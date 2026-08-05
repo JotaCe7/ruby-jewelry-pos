@@ -11,7 +11,7 @@ User = get_user_model()
 
 class CurrentUserView(APIView):
     """Tells the frontend who's logged in and their role, so it can show
-    the Admin nav/screens or the stripped-down Vendedor-only POS view."""
+    the Admin nav/screens or the stripped-down Seller-only POS view."""
 
     def get(self, request):
         user = request.user
@@ -29,11 +29,11 @@ class UserAccountViewSet(viewsets.ModelViewSet):
     profile fields this business wants on file (phone, birth date, etc).
     Also the single source for seller-selection dropdowns elsewhere
     (force-open a register, retroactive sale attribution, closing another
-    seller's register on their behalf) via `?is_active=true` — there used
+    seller's register on their behalf) via `?is_active=true`. There used
     to be a separate bare id/username-only endpoint for that, which was
     real duplication with no actual behavioral need, since this ViewSet
     already returns everything that one did plus more. Never
-    hard-deletes — DELETE isn't exposed at all; deactivate via PATCH
+    hard-deletes. DELETE isn't exposed at all; deactivate via PATCH
     {"is_active": false} instead, matching this project's soft-disable
     convention everywhere else (never break the historical FK from past
     sales/closings to a removed user)."""

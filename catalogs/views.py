@@ -26,14 +26,14 @@ from .services import preview_next_category_code, preview_next_subcategory_code
 
 
 class ExpenseCategoryViewSet(viewsets.ModelViewSet):
-    # Finance-only concept — a Vendedor never needs to see expense categories.
+    # Finance-only concept: a Seller never needs to see expense categories.
     queryset = ExpenseCategory.objects.all()
     serializer_class = ExpenseCategorySerializer
     permission_classes = [IsAdminUser]
 
 
 class PaymentMethodViewSet(viewsets.ModelViewSet):
-    # A Vendedor picks a payment method at checkout, so this needs to stay
+    # A Seller picks a payment method at checkout, so this needs to stay
     # readable for them, just not editable.
     queryset = PaymentMethod.objects.all()
     serializer_class = PaymentMethodSerializer

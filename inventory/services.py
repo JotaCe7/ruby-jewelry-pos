@@ -14,19 +14,19 @@ def _ean13_check_digit(digits12: str) -> str:
 
 
 def generate_barcode() -> str:
-    """Allocates the next sequential EAN-13 barcode for a Product label —
+    """Allocates the next sequential EAN-13 barcode for a Product label:
     "20" + a 10-digit sequential number + a checksum digit. "20" is
     GS1's reserved prefix range for internal/restricted-circulation use,
     so this is honest about not being a real registered retail barcode
     without needing to pay for one. Locks BarcodeSequence's single row
     (select_for_update) before allocating, mirroring
-    pos.services.issue_document's correlativo locking — same
-    correctness need: two concurrent product creations must never
+    pos.services.issue_document's sequence-number locking. Both need the
+    same guarantee: two concurrent product creations must never
     receive the same number."""
     from .models import BarcodeSequence
 
     BarcodeSequence.get_or_create_singleton()
-    # select_for_update requires an open transaction — unlike
+    # select_for_update requires an open transaction. Unlike
     # ProductCategory/ProductSubcategory/Product's own save() overrides,
     # which wrap their locking in transaction.atomic() themselves, this
     # is a plain function that can be called from anywhere (e.g.
@@ -44,7 +44,7 @@ def generate_barcode() -> str:
 
 def preview_next_product_code(subcategory) -> str:
     """Best-effort preview of what Product.save() would assign to `sku`
-    next — mirrors that MAX-based logic exactly (must stay in sync with
+    next, mirroring that MAX-based logic exactly (must stay in sync with
     it if it ever changes), without locking anything, since nothing is
     actually being created yet."""
     from .models import Product
@@ -63,8 +63,9 @@ def get_current_stock(product) -> int:
     right after saving a row that a fresh query wouldn't reflect yet."""
     entries_total = product.entries.aggregate(total=Sum("quantity"))["total"] or 0
     audit_loss_total = product.audits.aggregate(total=Sum("loss_adjustment"))["total"] or 0
+    damages_total = product.damages.aggregate(total=Sum("quantity"))["total"] or 0
     exits_total = product.exits.aggregate(total=Sum("quantity"))["total"] or 0
-    return entries_total - audit_loss_total - exits_total
+    return entries_total - audit_loss_total - damages_total - exits_total
 
 
 def apply_stock_entry_cost(product, stock_before: int, entry_quantity: int, entry_unit_cost: Decimal):

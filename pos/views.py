@@ -42,9 +42,9 @@ User = get_user_model()
 
 class SaleViewSet(viewsets.ModelViewSet):
     # Any authenticated user can ring up a sale, but browsing/reprinting
-    # tickets is scoped to "only my own sales" for a Vendedor — same
-    # data-minimization precedent as removing Inventario access. Admin sees
-    # everyone's, needed for the Ventas/anulación screen.
+    # tickets is scoped to "only my own sales" for a Seller. Same
+    # data-minimization precedent as removing Inventory access. Admin sees
+    # everyone's, needed for the Sales/void screen.
     queryset = (
         Sale.objects.select_related("customer", "seller")
         .prefetch_related("lines__product", "lines__payment_method", "documents")
@@ -67,7 +67,7 @@ class SaleViewSet(viewsets.ModelViewSet):
 
 
 class DraftSaleView(APIView):
-    """The current user's single in-progress ticket — persisted server-side
+    """The current user's single in-progress ticket, persisted server-side
     so a dead phone or switching devices mid-sale doesn't lose it. Never
     touches stock; only `finalize` promotes it into a real Sale."""
 
@@ -134,8 +134,8 @@ class DraftSaleFinalizeView(APIView):
 
 class RegisterStatusView(APIView):
     """The caller's own register status plus the current global process
-    date — polled by the frontend to decide whether to show the
-    'abrir caja' gate before letting a Vendedor into the POS ticket."""
+    date, polled by the frontend to decide whether to show the
+    'open register' gate before letting a Seller into the POS ticket."""
 
     def get(self, request):
         session = CashRegisterSession.objects.filter(seller=request.user).first()
@@ -159,7 +159,7 @@ class RegisterOpenView(APIView):
 
 class RegisterForceOpenView(APIView):
     """Admin-only: force-opens another seller's register regardless of the
-    'must equal today' rule — the first step of the retroactive-correction
+    'must equal today' rule. This is the first step of the retroactive-correction
     flow (attribute a forgotten sale to an already-Z'd date)."""
 
     permission_classes = [IsAdminUser]
@@ -191,7 +191,7 @@ class RegisterClosingActionView(APIView):
       the session and (if nobody else is open) advances the process date.
 
     `seller` in the body is only for the narrow admin-on-behalf-of case
-    (retroactive correction) — normally the caller closes their own
+    (retroactive correction). Normally the caller closes their own
     register and `seller` is omitted."""
 
     def post(self, request):
@@ -235,7 +235,7 @@ class RegisterClosingActionView(APIView):
 
 class RegisterPinView(APIView):
     """Admin-only: each admin manages their own PIN (the closing system
-    checks every admin's PIN to find who's authorizing — see
+    checks every admin's PIN to find who's authorizing, per
     pos/models.py:AdminPin). GET reports whether the CALLING admin has set
     one yet; the hash itself is never returned."""
 
@@ -255,7 +255,7 @@ class RegisterPinView(APIView):
 
 class RegisterClosingViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
     """Read-only history of executed closings, for the future Admin
-    reprint/history screen — Impresora-mode runs only, Pantalla previews
+    reprint/history screen. Impresora-mode runs only; Pantalla previews
     are never persisted."""
 
     permission_classes = [IsAdminUser]
@@ -265,9 +265,9 @@ class RegisterClosingViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, v
 
 
 class SaleDocumentViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
-    """Read-only browsing of issued comprobantes (for reprinting a Nota de
-    Venta or finding one to anular), plus the anulación action itself.
-    Scoped to "only my own sales" for a Vendedor, same as SaleViewSet."""
+    """Read-only browsing of issued documents (for reprinting a Sales
+    Receipt or finding one to void), plus the void action itself.
+    Scoped to "only my own sales" for a Seller, same as SaleViewSet."""
 
     queryset = SaleDocument.objects.select_related("sale", "voided_by").all()
     serializer_class = SaleDocumentSerializer

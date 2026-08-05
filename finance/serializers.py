@@ -85,7 +85,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
         currency = validated_data.get("currency", instance.currency)
         original_amount = validated_data.get("original_amount", instance.original_amount)
         # The exchange rate is only re-resolved if the fields it depends on
-        # change — otherwise the original frozen snapshot is preserved.
+        # change. Otherwise the original frozen snapshot is preserved.
         if date != instance.date or currency != instance.currency:
             validated_data["exchange_rate"] = self._resolve_exchange_rate(
                 date, currency, None

@@ -5,7 +5,7 @@ from django.db.models import F, Sum
 from django.db.models.functions import Coalesce
 from django.utils.translation import gettext_lazy as _
 
-from inventory.models import InventoryAudit, Product
+from inventory.models import InventoryAudit, InventoryDamage, Product
 from pos.models import CashRegisterSession, ClosingType, InventoryExit, MovementType
 from pos.services import compute_closing_totals, get_process_date
 
@@ -13,7 +13,7 @@ from pos.services import compute_closing_totals, get_process_date
 def get_today_snapshot():
     """Live, in-progress numbers for the Admin walking the floor: each
     seller's sales since they opened their register today (same math as
-    an X-closing preview, just without the PIN gate — nothing is executed
+    an X-closing preview, just without the PIN gate: nothing is executed
     or persisted here), plus which products need restocking right now."""
     sellers = []
     for session in CashRegisterSession.objects.select_related("seller").order_by("seller__username"):
@@ -50,34 +50,34 @@ def get_today_snapshot():
 
 
 def get_summary(date_from, date_to):
-    """One aggregation pass over every SALE/GIFT/DAMAGED exit in range,
-    computing income, per-payment-method, per-seller and per-supplier
-    breakdowns together — deliberately plain Python aggregation (not
-    combined annotate()s) at this shop's scale, sidestepping the
-    Sum-fan-out risk documented on Product.with_stock()."""
+    """One aggregation pass over every SALE/GIFT exit in range, computing
+    income, per-payment-method, per-seller and per-supplier breakdowns
+    together. This is deliberately plain Python aggregation (not combined
+    annotate()s) at this shop's scale, sidestepping the Sum-fan-out risk
+    documented on Product.with_stock(). Damage reports are a separate,
+    Admin-only event unrelated to any Sale/seller. They are aggregated on
+    their own below, the same way audit shrinkage already is."""
     exits = InventoryExit.objects.filter(
         sale__date__gte=date_from, sale__date__lte=date_to, sale__is_voided=False
     ).select_related("product__supplier", "payment_method", "sale__seller")
 
     total_income = Decimal("0.00")
     by_payment_method = defaultdict(lambda: Decimal("0.00"))
-    by_seller = defaultdict(
-        lambda: {"total_sales": Decimal("0.00"), "sale_count": 0, "gift_count": 0, "damaged_count": 0}
-    )
+    by_seller = defaultdict(lambda: {"total_sales": Decimal("0.00"), "sale_count": 0, "gift_count": 0})
     by_supplier = defaultdict(lambda: {"revenue": Decimal("0.00"), "cost": Decimal("0.00")})
     by_product = defaultdict(lambda: {"revenue": Decimal("0.00"), "quantity": 0})
-    gift_damaged_losses = Decimal("0.00")
+    gift_losses = Decimal("0.00")
     sale_ids_by_seller = defaultdict(set)
 
     for exit_row in exits:
         seller = exit_row.sale.seller
         seller_key = seller.id if seller else None
         seller_bucket = by_seller[seller_key]
-        seller_bucket["username"] = seller.username if seller else "—"
+        seller_bucket["username"] = seller.username if seller else "N/A"
 
         if exit_row.movement_type == MovementType.SALE:
             total_income += exit_row.final_price
-            method_name = exit_row.payment_method.name if exit_row.payment_method else "—"
+            method_name = exit_row.payment_method.name if exit_row.payment_method else "N/A"
             by_payment_method[method_name] += exit_row.final_price
             seller_bucket["total_sales"] += exit_row.final_price
             sale_ids_by_seller[seller_key].add(exit_row.sale_id)
@@ -95,17 +95,17 @@ def get_summary(date_from, date_to):
             product_bucket["revenue"] += exit_row.final_price
             product_bucket["quantity"] += exit_row.quantity
         else:
-            gift_damaged_losses += exit_row.unit_cost_snapshot * exit_row.quantity
-            if exit_row.movement_type == MovementType.GIFT:
-                seller_bucket["gift_count"] += exit_row.quantity
-            else:
-                seller_bucket["damaged_count"] += exit_row.quantity
+            gift_losses += exit_row.unit_cost_snapshot * exit_row.quantity
+            seller_bucket["gift_count"] += exit_row.quantity
 
     for seller_key, sale_ids in sale_ids_by_seller.items():
         by_seller[seller_key]["sale_count"] = len(sale_ids)
 
     audit_shrinkage = InventoryAudit.objects.filter(date__gte=date_from, date__lte=date_to).aggregate(
         total=Coalesce(Sum("loss_value"), Decimal("0.00"))
+    )["total"]
+    damage_losses = InventoryDamage.objects.filter(date__gte=date_from, date__lte=date_to).aggregate(
+        total=Coalesce(Sum(F("quantity") * F("unit_cost_snapshot")), Decimal("0.00"))
     )["total"]
 
     supplier_rows = []
@@ -131,7 +131,6 @@ def get_summary(date_from, date_to):
             "total_sales": str(bucket["total_sales"]),
             "sale_count": bucket["sale_count"],
             "gift_count": bucket["gift_count"],
-            "damaged_count": bucket["damaged_count"],
         }
         for key, bucket in by_seller.items()
     ]
@@ -161,9 +160,10 @@ def get_summary(date_from, date_to):
         "by_seller": seller_rows,
         "by_supplier": supplier_rows,
         "top_products": top_products[:10],
-        "total_losses": str(gift_damaged_losses + audit_shrinkage),
+        "total_losses": str(gift_losses + damage_losses + audit_shrinkage),
         "losses_breakdown": {
-            "gifts_damaged": str(gift_damaged_losses),
+            "gifts": str(gift_losses),
+            "damage_reports": str(damage_losses),
             "audit_shrinkage": str(audit_shrinkage),
         },
         "inventory_value": str(inventory_value),
