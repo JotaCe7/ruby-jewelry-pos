@@ -1,3 +1,4 @@
+from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -13,6 +14,7 @@ from .serializers import (
     InventoryAuditSerializer,
     InventoryDamageSerializer,
     InventoryEntrySerializer,
+    PriceTierCopySerializer,
     PriceTierSerializer,
     ProductSerializer,
 )
@@ -54,6 +56,27 @@ class PriceTierViewSet(viewsets.ModelViewSet):
     serializer_class = PriceTierSerializer
     filterset_fields = ["product"]
     permission_classes = [IsAdminUser]
+
+    @action(detail=False, methods=["post"])
+    def copy(self, request):
+        # Replaces (not merges) each target's tier set with the source's,
+        # so reverting a temporary price change is just copying the
+        # normal set back over the same targets.
+        serializer = PriceTierCopySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        source = serializer.validated_data["source_product"]
+        targets = [
+            product for product in serializer.validated_data["target_products"] if product.pk != source.pk
+        ]
+        tiers = list(source.price_tiers.values("min_quantity", "unit_price"))
+        with transaction.atomic():
+            PriceTier.objects.filter(product__in=targets).delete()
+            PriceTier.objects.bulk_create(
+                PriceTier(product=target, min_quantity=tier["min_quantity"], unit_price=tier["unit_price"])
+                for target in targets
+                for tier in tiers
+            )
+        return Response(status=204)
 
 
 class InventoryEntryViewSet(viewsets.ModelViewSet):

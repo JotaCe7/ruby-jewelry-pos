@@ -6,7 +6,7 @@ from django.test import TestCase, TransactionTestCase
 from catalogs.models import ProductCategory, ProductSubcategory
 from pos.models import InventoryExit, MovementType, Sale
 
-from .models import BarcodeSequence, InventoryAudit, InventoryDamage, InventoryEntry, Product
+from .models import BarcodeSequence, InventoryAudit, InventoryDamage, InventoryEntry, PriceTier, Product
 from .services import _ean13_check_digit, apply_stock_entry_cost, generate_barcode, get_current_stock
 
 
@@ -212,6 +212,57 @@ class InventoryDamageApiTests(TestCase):
         response = self.client.post(
             "/api/inventory/damages/",
             {"date": "2026-01-05", "product": product.id, "quantity": 1},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+
+class PriceTierCopyApiTests(TestCase):
+    """Copying tiers replaces a target's whole set rather than merging with
+    it, so reverting a temporary price change is just copying the normal
+    set back over the same targets."""
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        self.admin = User.objects.create_user(username="admin_tier", password="x", is_staff=True)
+        self.seller = User.objects.create_user(username="seller_tier", password="x", is_staff=False)
+        self.client = APIClient()
+
+    def test_copying_tiers_replaces_each_targets_existing_set(self):
+        source = make_product(sku="SRC-1")
+        target_a = make_product(sku="TGT-1")
+        target_b = make_product(sku="TGT-2")
+        PriceTier.objects.create(product=source, min_quantity=3, unit_price=Decimal("4.00"))
+        PriceTier.objects.create(product=source, min_quantity=6, unit_price=Decimal("3.50"))
+        # A stale tier on target_a that isn't in source must be gone afterward.
+        PriceTier.objects.create(product=target_a, min_quantity=2, unit_price=Decimal("9.00"))
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post(
+            "/api/inventory/price-tiers/copy/",
+            {"source_product": source.id, "target_products": [target_a.id, target_b.id]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 204, response.data)
+        for target in (target_a, target_b):
+            tiers = list(
+                PriceTier.objects.filter(product=target).order_by("min_quantity").values_list(
+                    "min_quantity", "unit_price"
+                )
+            )
+            self.assertEqual(tiers, [(3, Decimal("4.00")), (6, Decimal("3.50"))])
+
+    def test_a_non_admin_seller_cannot_copy_tiers(self):
+        source = make_product(sku="SRC-2")
+        target = make_product(sku="TGT-3")
+        self.client.force_authenticate(user=self.seller)
+
+        response = self.client.post(
+            "/api/inventory/price-tiers/copy/",
+            {"source_product": source.id, "target_products": [target.id]},
             format="json",
         )
 

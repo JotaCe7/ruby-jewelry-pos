@@ -13,6 +13,11 @@ class PriceTierSerializer(serializers.ModelSerializer):
         fields = ["id", "product", "min_quantity", "unit_price"]
 
 
+class PriceTierCopySerializer(serializers.Serializer):
+    source_product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    target_products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
+
+
 class ProductSerializer(serializers.ModelSerializer):
     # sku is read-only (Product.editable=False). Product.save() assigns
     # it as the parent subcategory's hierarchical code + a sequential
