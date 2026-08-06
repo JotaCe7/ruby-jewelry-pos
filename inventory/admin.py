@@ -1,11 +1,16 @@
 from django.contrib import admin
 
-from .models import InventoryAudit, InventoryDamage, InventoryEntry, PriceTier, Product
+from .models import InventoryAudit, InventoryDamage, InventoryEntry, PackPrice, PriceTier, Product
 
 
 class PriceTierInline(admin.TabularInline):
     model = PriceTier
     extra = 0
+
+
+class PackPriceInline(admin.StackedInline):
+    model = PackPrice
+    max_num = 1
 
 
 @admin.register(Product)
@@ -23,7 +28,7 @@ class ProductAdmin(admin.ModelAdmin):
     ]
     list_filter = ["is_active", "subcategory__category", "subcategory", "supplier"]
     search_fields = ["sku", "barcode", "base_model"]
-    inlines = [PriceTierInline]
+    inlines = [PriceTierInline, PackPriceInline]
 
 
 @admin.register(InventoryEntry)

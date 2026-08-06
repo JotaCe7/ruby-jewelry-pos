@@ -9,11 +9,12 @@ from catalogs.models import ProductSubcategory
 from core.permissions import IsAdminOrReadOnly
 
 from .filters import ProductFilter
-from .models import InventoryAudit, InventoryDamage, InventoryEntry, PriceTier, Product
+from .models import InventoryAudit, InventoryDamage, InventoryEntry, PackPrice, PriceTier, Product
 from .serializers import (
     InventoryAuditSerializer,
     InventoryDamageSerializer,
     InventoryEntrySerializer,
+    PackPriceSerializer,
     PriceTierCopySerializer,
     PriceTierSerializer,
     ProductSerializer,
@@ -33,7 +34,7 @@ class ProductViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return (
             Product.objects.with_stock()
-            .select_related("subcategory__category", "color", "presentation", "supplier")
+            .select_related("subcategory__category", "color", "presentation", "supplier", "pack_price")
             .prefetch_related("price_tiers")
         )
 
@@ -77,6 +78,15 @@ class PriceTierViewSet(viewsets.ModelViewSet):
                 for tier in tiers
             )
         return Response(status=204)
+
+
+class PackPriceViewSet(viewsets.ModelViewSet):
+    # Pricing strategy is Admin-only. It's already exposed read-only to
+    # everyone nested inside ProductSerializer.pack_price.
+    queryset = PackPrice.objects.all()
+    serializer_class = PackPriceSerializer
+    filterset_fields = ["product"]
+    permission_classes = [IsAdminUser]
 
 
 class InventoryEntryViewSet(viewsets.ModelViewSet):

@@ -6,7 +6,7 @@ from django.test import TestCase, TransactionTestCase
 from catalogs.models import ProductCategory, ProductSubcategory
 from pos.models import InventoryExit, MovementType, Sale
 
-from .models import BarcodeSequence, InventoryAudit, InventoryDamage, InventoryEntry, PriceTier, Product
+from .models import BarcodeSequence, InventoryAudit, InventoryDamage, InventoryEntry, PackPrice, PriceTier, Product
 from .services import _ean13_check_digit, apply_stock_entry_cost, generate_barcode, get_current_stock
 
 
@@ -263,6 +263,64 @@ class PriceTierCopyApiTests(TestCase):
         response = self.client.post(
             "/api/inventory/price-tiers/copy/",
             {"source_product": source.id, "target_products": [target.id]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+
+class PackPriceApiTests(TestCase):
+    """A bundle promo like "2 for S/15": at most one per product, applying
+    at checkout is the caller's job (a plain floor-division), not this
+    model's."""
+
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        self.admin = User.objects.create_user(username="admin_pack", password="x", is_staff=True)
+        self.seller = User.objects.create_user(username="seller_pack", password="x", is_staff=False)
+        self.client = APIClient()
+
+    def test_pack_price_appears_nested_in_the_product_serializer(self):
+        product = make_product(sku="PACK-1", price="8.00")
+        PackPrice.objects.create(product=product, pack_quantity=2, pack_price=Decimal("15.00"))
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.get(f"/api/inventory/products/{product.id}/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["pack_price"]["pack_quantity"], 2)
+        self.assertEqual(Decimal(response.data["pack_price"]["pack_price"]), Decimal("15.00"))
+
+    def test_a_product_without_a_pack_price_serializes_it_as_null(self):
+        product = make_product(sku="PACK-2")
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.get(f"/api/inventory/products/{product.id}/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(response.data["pack_price"])
+
+    def test_a_second_pack_price_for_the_same_product_is_rejected(self):
+        product = make_product(sku="PACK-3")
+        PackPrice.objects.create(product=product, pack_quantity=2, pack_price=Decimal("15.00"))
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.post(
+            "/api/inventory/pack-prices/",
+            {"product": product.id, "pack_quantity": 3, "pack_price": "20.00"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_a_non_admin_seller_cannot_write_pack_prices(self):
+        product = make_product(sku="PACK-4")
+        self.client.force_authenticate(user=self.seller)
+
+        response = self.client.post(
+            "/api/inventory/pack-prices/",
+            {"product": product.id, "pack_quantity": 2, "pack_price": "15.00"},
             format="json",
         )
 
