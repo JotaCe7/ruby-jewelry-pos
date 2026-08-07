@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.utils.translation import gettext_lazy as _
 from rest_framework import serializers
 
-from .models import InventoryAudit, InventoryDamage, InventoryEntry, PriceTier, Product
+from .models import InventoryAudit, InventoryDamage, InventoryEntry, PackPrice, PriceTier, Product
 from .services import apply_stock_entry_cost, generate_barcode, get_current_stock
 
 
@@ -11,6 +11,17 @@ class PriceTierSerializer(serializers.ModelSerializer):
     class Meta:
         model = PriceTier
         fields = ["id", "product", "min_quantity", "unit_price"]
+
+
+class PriceTierCopySerializer(serializers.Serializer):
+    source_product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    target_products = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all(), many=True)
+
+
+class PackPriceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PackPrice
+        fields = ["id", "product", "pack_quantity", "pack_price"]
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -29,6 +40,7 @@ class ProductSerializer(serializers.ModelSerializer):
     inventory_value = serializers.SerializerMethodField()
     needs_restock = serializers.SerializerMethodField()
     price_tiers = PriceTierSerializer(many=True, read_only=True)
+    pack_price = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -55,8 +67,14 @@ class ProductSerializer(serializers.ModelSerializer):
             "inventory_value",
             "needs_restock",
             "price_tiers",
+            "pack_price",
         ]
         read_only_fields = ["unit_cost"]
+
+    def get_pack_price(self, obj) -> dict | None:
+        if not hasattr(obj, "pack_price"):
+            return None
+        return PackPriceSerializer(obj.pack_price).data
 
     def get_current_stock(self, obj) -> int:
         # `with_stock()` annotates this on list/retrieve queries; instances

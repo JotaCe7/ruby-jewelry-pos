@@ -162,6 +162,22 @@ class PriceTier(TimeStampedModel):
         return f"{self.product.sku} ({self.min_quantity}+: {self.unit_price})"
 
 
+class PackPrice(TimeStampedModel):
+    """A bundle promo like "2 for S/15": every complete pack of
+    `pack_quantity` units costs `pack_price` as a set, and any units beyond
+    the last complete pack are charged at the flat `suggested_price`. One
+    per product (not several pack sizes), so applying it is a plain
+    floor-division rather than a change-making problem over multiple pack
+    sizes."""
+
+    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name="pack_price")
+    pack_quantity = models.PositiveIntegerField(validators=[MinValueValidator(2)])
+    pack_price = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"{self.product.sku} ({self.pack_quantity} for {self.pack_price})"
+
+
 class InventoryEntry(TimeStampedModel):
     """The physical 'unpacking' record. `unit_cost` is optional: when given,
     it updates the product's running weighted-average cost; when omitted,
