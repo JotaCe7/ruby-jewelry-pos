@@ -32,6 +32,7 @@ class ProductSerializer(serializers.ModelSerializer):
     # left blank, though it remains editable, e.g. to use a supplier's own barcode.
     barcode = serializers.CharField(required=False, allow_blank=True)
     subcategory_name = serializers.CharField(source="subcategory.name", read_only=True)
+    category = serializers.IntegerField(source="subcategory.category_id", read_only=True)
     category_name = serializers.CharField(source="subcategory.category.name", read_only=True)
     color_name = serializers.CharField(source="color.name", read_only=True, default=None)
     presentation_name = serializers.CharField(source="presentation.name", read_only=True, default=None)
@@ -52,6 +53,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "image",
             "subcategory",
             "subcategory_name",
+            "category",
             "category_name",
             "color",
             "color_name",
